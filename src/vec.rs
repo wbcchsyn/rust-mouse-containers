@@ -54,9 +54,10 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
+use core::iter::IntoIterator;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut, Index, IndexMut};
-use core::slice::SliceIndex;
+use core::slice::{Iter, SliceIndex};
 use std::alloc::handle_alloc_error;
 use std::borrow::{Borrow, BorrowMut};
 
@@ -264,6 +265,18 @@ where
 {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.deref_mut()[index]
+    }
+}
+
+impl<'a, T, A> IntoIterator for &'a Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.deref().into_iter()
     }
 }
 
