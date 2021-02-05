@@ -81,6 +81,9 @@ where
     alloc_: A,
 }
 
+unsafe impl<T, A> Send for Vec<T, A> where A: Send + GlobalAlloc {}
+unsafe impl<T, A> Sync for Vec<T, A> where A: Sync + GlobalAlloc {}
+
 impl<T, A> Drop for Vec<T, A>
 where
     A: GlobalAlloc,
