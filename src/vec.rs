@@ -53,6 +53,7 @@
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::cmp::Ordering;
+use core::hash::{Hash, Hasher};
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 use std::alloc::handle_alloc_error;
@@ -170,6 +171,20 @@ where
         let this: &[T] = self.borrow();
         let other: &[T] = other.borrow();
         this.cmp(other)
+    }
+}
+
+impl<T, A> Hash for Vec<T, A>
+where
+    T: Hash,
+    A: GlobalAlloc,
+{
+    fn hash<H>(&self, hasher: &mut H)
+    where
+        H: Hasher,
+    {
+        let this: &[T] = self.borrow();
+        this.hash(hasher);
     }
 }
 
