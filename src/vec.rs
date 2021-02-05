@@ -129,6 +129,25 @@ where
     }
 }
 
+impl<T, A> PartialEq<Self> for Vec<T, A>
+where
+    T: PartialEq<T>,
+    A: GlobalAlloc,
+{
+    fn eq(&self, other: &Self) -> bool {
+        let this: &[T] = self.borrow();
+        let other: &[T] = other.borrow();
+        this.eq(other)
+    }
+}
+
+impl<T, A> Eq for Vec<T, A>
+where
+    T: Eq,
+    A: GlobalAlloc,
+{
+}
+
 impl<T, A> AsRef<[T]> for Vec<T, A>
 where
     A: GlobalAlloc,
