@@ -57,7 +57,7 @@ use core::hash::{Hash, Hasher};
 use core::iter::IntoIterator;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut, Index, IndexMut};
-use core::slice::{Iter, SliceIndex};
+use core::slice::{Iter, IterMut, SliceIndex};
 use std::alloc::handle_alloc_error;
 use std::borrow::{Borrow, BorrowMut};
 
@@ -277,6 +277,18 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         self.deref().into_iter()
+    }
+}
+
+impl<'a, T, A> IntoIterator for &'a mut Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    type Item = &'a mut T;
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.deref_mut().into_iter()
     }
 }
 
