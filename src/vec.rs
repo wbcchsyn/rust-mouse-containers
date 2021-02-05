@@ -140,6 +140,11 @@ where
         self.capacity_
     }
 
+    /// Returns `ture` if `self` holds no element, or `false` .
+    pub fn is_empty(&self) -> bool {
+        self.len_ == 0
+    }
+
     /// Returns a reference to `alloc` .
     pub fn alloc(&self) -> &A {
         &self.alloc_
@@ -294,5 +299,20 @@ mod tests {
             assert_eq!(10, v.capacity());
             assert_eq!(0, v.len());
         }
+    }
+
+    #[test]
+    fn is_empty() {
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+        assert_eq!(true, v.is_empty());
+
+        for i in 0..10 {
+            v.push(GBox::new(i, alloc.clone()));
+            assert_eq!(false, v.is_empty());
+        }
+
+        v.clear();
+        assert_eq!(true, v.is_empty());
     }
 }
