@@ -117,6 +117,16 @@ where
     }
 }
 
+impl<T, A> Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    /// Returns the number of elements that `self` is holding.
+    pub fn len(&self) -> usize {
+        self.len_
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,6 +134,7 @@ mod tests {
 
     #[test]
     fn from() {
-        let _v: Vec<u8, GAlloc> = Vec::from(GAlloc::default());
+        let v: Vec<u8, GAlloc> = Vec::from(GAlloc::default());
+        assert_eq!(0, v.len());
     }
 }
