@@ -51,7 +51,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-use core::alloc::GlobalAlloc;
+use core::alloc::{GlobalAlloc, Layout};
 
 /// `Vec` behaves like 'std::vec::Vec' except for the followings.
 ///
@@ -71,4 +71,25 @@ where
     len_: usize,
     capacity_: usize,
     alloc: A,
+}
+
+impl<T, A> Drop for Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    fn drop(&mut self) {
+        if self.ptr.is_null() {
+            return;
+        }
+
+        unsafe {
+            for i in 0..self.len_ {
+                let ptr = self.ptr.add(i);
+                ptr.drop_in_place();
+            }
+
+            let layout = Layout::array::<T>(self.capacity_).unwrap();
+            self.alloc.dealloc(self.ptr as *mut u8, layout);
+        }
+    }
 }
