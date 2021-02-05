@@ -55,6 +55,7 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 use std::alloc::handle_alloc_error;
+use std::borrow::{Borrow, BorrowMut};
 
 /// `Vec` behaves like 'std::vec::Vec' except for the followings.
 ///
@@ -125,6 +126,42 @@ where
         let mut ret = Self::from(alloc);
         ret.reserve(capacity);
         ret
+    }
+}
+
+impl<T, A> AsRef<[T]> for Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    fn as_ref(&self) -> &[T] {
+        self.deref()
+    }
+}
+
+impl<T, A> AsMut<[T]> for Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    fn as_mut(&mut self) -> &mut [T] {
+        self.deref_mut()
+    }
+}
+
+impl<T, A> Borrow<[T]> for Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    fn borrow(&self) -> &[T] {
+        self.deref()
+    }
+}
+
+impl<T, A> BorrowMut<[T]> for Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    fn borrow_mut(&mut self) -> &mut [T] {
+        self.deref_mut()
     }
 }
 
