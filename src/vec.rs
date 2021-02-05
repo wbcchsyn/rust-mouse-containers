@@ -52,6 +52,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 use core::alloc::{GlobalAlloc, Layout};
+use core::mem::MaybeUninit;
 use std::alloc::handle_alloc_error;
 
 /// `Vec` behaves like 'std::vec::Vec' except for the followings.
@@ -223,6 +224,24 @@ where
         self.len_ += 1;
     }
 
+    /// Removes the last element from `self` and returns it if any, or `None` .
+    pub fn pop(&mut self) -> Option<T> {
+        if self.len_ == 0 {
+            None
+        } else {
+            self.len_ -= 1;
+
+            unsafe {
+                let mut ret: MaybeUninit<T> = MaybeUninit::uninit();
+
+                let ptr = self.ptr.add(self.len_);
+                ret.as_mut_ptr().copy_from_nonoverlapping(ptr, 1);
+
+                Some(ret.assume_init())
+            }
+        }
+    }
+
     /// Clears `self` , removing all the elements.
     ///
     /// Note that this method has no effect on the allocated capacity.
@@ -349,5 +368,26 @@ mod tests {
         v.extend_from_slice(&sl);
         assert_eq!(2, v.len());
         assert_eq!(10, v.capacity());
+    }
+
+    #[test]
+    fn pop() {
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+        assert_eq!(None, v.pop());
+
+        for i in 0..10 {
+            for j in 0..i {
+                v.push(GBox::new(j, alloc.clone()));
+            }
+
+            for j in (0..i).rev() {
+                assert_eq!(Some(GBox::from(j)), v.pop());
+                assert_eq!(j, v.len());
+                assert_eq!(10, v.capacity());
+            }
+        }
+
+        assert_eq!(None, v.pop());
     }
 }
