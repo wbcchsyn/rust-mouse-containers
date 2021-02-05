@@ -52,3 +52,5 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 //! `mouse-containers` declares container structs for `mouse` .
+
+#![deny(missing_docs)]
