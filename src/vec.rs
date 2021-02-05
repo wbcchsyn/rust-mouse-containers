@@ -275,14 +275,26 @@ where
     ///
     /// Note that this method has no effect on the allocated capacity.
     pub fn clear(&mut self) {
+        self.truncate(0);
+    }
+
+    /// Shortens `self` , keeping the first `len` elements and drops the rest if `len` is less than
+    /// the current length; otherwise it does nothing.
+    ///
+    /// Note that this method has no effect on the allocated capacity.
+    pub fn truncate(&mut self, len: usize) {
+        if self.len_ <= len {
+            return;
+        }
+
         unsafe {
-            for i in 0..self.len_ {
+            for i in len..self.len_ {
                 let ptr = self.ptr.add(i);
                 ptr.drop_in_place();
             }
         }
 
-        self.len_ = 0;
+        self.len_ = len;
     }
 
     /// Clones and appends all the elements in `other` to the end of `self` .
@@ -437,6 +449,24 @@ mod tests {
             v.clear();
             v.shrink_to_fit();
             assert_eq!(v.len(), v.capacity());
+        }
+    }
+
+    #[test]
+    fn truncate() {
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+
+        for i in 0..15 {
+            for j in 0..10 {
+                v.push(GBox::new(j, alloc.clone()));
+            }
+
+            v.truncate(i);
+            assert_eq!(10, v.capacity());
+            assert_eq!(usize::min(10, i), v.len());
+
+            v.clear();
         }
     }
 }
