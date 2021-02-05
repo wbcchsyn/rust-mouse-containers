@@ -56,3 +56,5 @@
 #![deny(missing_docs)]
 
 mod vec;
+
+pub use vec::Vec;

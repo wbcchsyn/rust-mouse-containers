@@ -50,3 +50,25 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
+
+use core::alloc::GlobalAlloc;
+
+/// `Vec` behaves like 'std::vec::Vec' except for the followings.
+///
+/// - `Vec` takes allocator as the parameter.
+/// - `Vec` causes a panic if the size will exceed the capacity because it costs O(n) CPU time.
+///   Method [`push`] for example, causes a panic if `len` equals to `capacity` .
+///   User must call `reserve` in advance if necessary.
+/// - `Vec` does not implement some methods that costs O(n) CPU time or more on purpose.
+///
+/// [`push`]: #method.push
+#[derive(Debug)]
+pub struct Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    ptr: *mut T,
+    len_: usize,
+    capacity_: usize,
+    alloc: A,
+}
