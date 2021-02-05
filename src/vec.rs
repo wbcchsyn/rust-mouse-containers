@@ -70,7 +70,7 @@ where
     ptr: *mut T,
     len_: usize,
     capacity_: usize,
-    alloc: A,
+    alloc_: A,
 }
 
 impl<T, A> Drop for Vec<T, A>
@@ -89,7 +89,7 @@ where
             }
 
             let layout = Layout::array::<T>(self.capacity_).unwrap();
-            self.alloc.dealloc(self.ptr as *mut u8, layout);
+            self.alloc_.dealloc(self.ptr as *mut u8, layout);
         }
     }
 }
@@ -112,7 +112,7 @@ where
             ptr: core::ptr::null_mut(),
             len_: 0,
             capacity_: 0,
-            alloc,
+            alloc_: alloc,
         }
     }
 }
@@ -129,6 +129,11 @@ where
     /// Returns the number of elements that `self` can hold without new allocation.
     pub fn capacity(&self) -> usize {
         self.capacity_
+    }
+
+    /// Returns a reference to `alloc` .
+    pub fn alloc(&self) -> &A {
+        &self.alloc_
     }
 }
 
