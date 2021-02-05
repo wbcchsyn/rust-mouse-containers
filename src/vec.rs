@@ -125,6 +125,11 @@ where
     pub fn len(&self) -> usize {
         self.len_
     }
+
+    /// Returns the number of elements that `self` can hold without new allocation.
+    pub fn capacity(&self) -> usize {
+        self.capacity_
+    }
 }
 
 #[cfg(test)]
@@ -136,5 +141,6 @@ mod tests {
     fn from() {
         let v: Vec<u8, GAlloc> = Vec::from(GAlloc::default());
         assert_eq!(0, v.len());
+        assert_eq!(0, v.capacity());
     }
 }
