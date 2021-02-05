@@ -52,6 +52,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 use core::alloc::{GlobalAlloc, Layout};
+use core::cmp::Ordering;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 use std::alloc::handle_alloc_error;
@@ -146,6 +147,30 @@ where
     T: Eq,
     A: GlobalAlloc,
 {
+}
+
+impl<T, A> PartialOrd<Self> for Vec<T, A>
+where
+    T: PartialOrd<T>,
+    A: GlobalAlloc,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let this: &[T] = self.borrow();
+        let other: &[T] = other.borrow();
+        this.partial_cmp(other)
+    }
+}
+
+impl<T, A> Ord for Vec<T, A>
+where
+    T: Ord,
+    A: GlobalAlloc,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        let this: &[T] = self.borrow();
+        let other: &[T] = other.borrow();
+        this.cmp(other)
+    }
 }
 
 impl<T, A> AsRef<[T]> for Vec<T, A>
