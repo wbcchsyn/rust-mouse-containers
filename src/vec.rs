@@ -94,6 +94,15 @@ where
     }
 }
 
+impl<T, A> Default for Vec<T, A>
+where
+    A: Default + GlobalAlloc,
+{
+    fn default() -> Self {
+        Self::from(A::default())
+    }
+}
+
 impl<T, A> From<A> for Vec<T, A>
 where
     A: GlobalAlloc,
