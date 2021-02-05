@@ -54,3 +54,7 @@
 //! `mouse-containers` declares container structs for `mouse` .
 
 #![deny(missing_docs)]
+
+mod vec;
+
+pub use vec::Vec;
