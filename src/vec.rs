@@ -209,12 +209,24 @@ where
         self.ptr = ptr as *mut T;
         self.capacity_ = self.len() + additional;
     }
+
+    /// Appends `val` to the end of the buffer.
+    pub fn push(&mut self, val: T) {
+        assert!(self.len_ < self.capacity_);
+
+        unsafe {
+            let ptr = self.ptr.add(self.len_);
+            ptr.write(val);
+        }
+
+        self.len_ += 1;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gharial::GAlloc;
+    use gharial::{GAlloc, GBox};
 
     #[test]
     fn from() {
@@ -234,5 +246,27 @@ mod tests {
         v.reserve(5);
         assert_eq!(0, v.len());
         assert!(5 <= v.capacity());
+    }
+
+    #[test]
+    fn push() {
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+
+        for i in 0..10 {
+            assert_eq!(10, v.capacity());
+            assert_eq!(i, v.len());
+            v.push(GBox::new(i, alloc.clone()));
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn push_panic() {
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, GAlloc::default());
+
+        for i in 0..=10 {
+            v.push(GBox::from(i));
+        }
     }
 }
