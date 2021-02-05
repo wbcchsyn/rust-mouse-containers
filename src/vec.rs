@@ -83,12 +83,8 @@ where
             return;
         }
 
+        self.clear();
         unsafe {
-            for i in 0..self.len_ {
-                let ptr = self.ptr.add(i);
-                ptr.drop_in_place();
-            }
-
             let layout = Layout::array::<T>(self.capacity_).unwrap();
             self.alloc_.dealloc(self.ptr as *mut u8, layout);
         }
@@ -221,6 +217,20 @@ where
 
         self.len_ += 1;
     }
+
+    /// Clears `self` , removing all the elements.
+    ///
+    /// Note that this method has no effect on the allocated capacity.
+    pub fn clear(&mut self) {
+        unsafe {
+            for i in 0..self.len_ {
+                let ptr = self.ptr.add(i);
+                ptr.drop_in_place();
+            }
+        }
+
+        self.len_ = 0;
+    }
 }
 
 #[cfg(test)]
@@ -267,6 +277,22 @@ mod tests {
 
         for i in 0..=10 {
             v.push(GBox::from(i));
+        }
+    }
+
+    #[test]
+    fn clear() {
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+
+        for i in 0..10 {
+            for j in 0..i {
+                v.push(GBox::new(j, alloc.clone()));
+            }
+
+            v.clear();
+            assert_eq!(10, v.capacity());
+            assert_eq!(0, v.len());
         }
     }
 }
