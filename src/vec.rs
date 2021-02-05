@@ -146,6 +146,17 @@ where
             self.ptr
         }
     }
+
+    /// Returns a raw pointer to the buffer.
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        // It seems that 'std::vec::Vec::as_mut_ptr()' returns nonnull pointer.
+        // This method follows the way.
+        if self.ptr.is_null() {
+            core::mem::align_of::<T>() as *mut T
+        } else {
+            self.ptr
+        }
+    }
 }
 
 #[cfg(test)]
