@@ -55,7 +55,8 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use core::mem::MaybeUninit;
-use core::ops::{Deref, DerefMut};
+use core::ops::{Deref, DerefMut, Index};
+use core::slice::SliceIndex;
 use std::alloc::handle_alloc_error;
 use std::borrow::{Borrow, BorrowMut};
 
@@ -241,6 +242,18 @@ where
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
+    }
+}
+
+impl<T, I, A> Index<I> for Vec<T, A>
+where
+    I: SliceIndex<[T], Output = T>,
+    A: GlobalAlloc,
+{
+    type Output = T;
+
+    fn index(&self, index: I) -> &Self::Output {
+        &self.deref()[index]
     }
 }
 
