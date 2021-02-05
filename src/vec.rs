@@ -93,3 +93,28 @@ where
         }
     }
 }
+
+impl<T, A> From<A> for Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    fn from(alloc: A) -> Self {
+        Self {
+            ptr: core::ptr::null_mut(),
+            len_: 0,
+            capacity_: 0,
+            alloc,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gharial::GAlloc;
+
+    #[test]
+    fn from() {
+        let _v: Vec<u8, GAlloc> = Vec::from(GAlloc::default());
+    }
+}
