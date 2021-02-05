@@ -52,6 +52,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 use core::alloc::{GlobalAlloc, Layout};
+use std::alloc::handle_alloc_error;
 
 /// `Vec` behaves like 'std::vec::Vec' except for the followings.
 ///
@@ -157,6 +158,45 @@ where
             self.ptr
         }
     }
+
+    /// Reserves capacity at least `additional` more elements to be inserted in `self` .
+    ///
+    /// This method does nothing if the capacity is already sufficient.
+    /// After this method is called, the capacity will be greater than or eqaul to `self.len() +
+    /// capacity` .
+    pub fn reserve(&mut self, additional: usize) {
+        if self.len() + additional <= self.capacity() {
+            return;
+        }
+
+        let ptr = if self.ptr.is_null() {
+            unsafe {
+                let layout = Layout::array::<T>(additional).unwrap();
+                let ptr = self.alloc_.alloc(layout);
+                if ptr.is_null() {
+                    handle_alloc_error(layout);
+                }
+
+                ptr
+            }
+        } else {
+            unsafe {
+                let layout = Layout::array::<T>(self.capacity_).unwrap();
+                let new_size = Layout::array::<T>(self.len() + additional).unwrap().size();
+                let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
+
+                if ptr.is_null() {
+                    let layout = Layout::array::<T>(self.len() + additional).unwrap();
+                    handle_alloc_error(layout);
+                }
+
+                ptr
+            }
+        };
+
+        self.ptr = ptr as *mut T;
+        self.capacity_ = self.len() + additional;
+    }
 }
 
 #[cfg(test)]
@@ -169,5 +209,18 @@ mod tests {
         let v: Vec<u8, GAlloc> = Vec::from(GAlloc::default());
         assert_eq!(0, v.len());
         assert_eq!(0, v.capacity());
+    }
+
+    #[test]
+    fn reserve() {
+        let mut v: Vec<usize, GAlloc> = Vec::from(GAlloc::default());
+
+        v.reserve(10);
+        assert_eq!(0, v.len());
+        assert!(10 <= v.capacity());
+
+        v.reserve(5);
+        assert_eq!(0, v.len());
+        assert!(5 <= v.capacity());
     }
 }
