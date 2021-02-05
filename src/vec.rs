@@ -122,6 +122,18 @@ impl<T, A> Vec<T, A>
 where
     A: GlobalAlloc,
 {
+    /// Creates a new empty instance with the specified capacity.
+    pub fn with_capacity(capacity: usize, alloc: A) -> Self {
+        let mut ret = Self::from(alloc);
+        ret.reserve(capacity);
+        ret
+    }
+}
+
+impl<T, A> Vec<T, A>
+where
+    A: GlobalAlloc,
+{
     /// Returns the number of elements that `self` is holding.
     pub fn len(&self) -> usize {
         self.len_
