@@ -212,6 +212,35 @@ where
         self.capacity_ = self.len() + additional;
     }
 
+    /// Shrinks the capacity to the length as much as possible.
+    pub fn shrink_to_fit(&mut self) {
+        if self.len_ == self.capacity_ {
+            return;
+        }
+
+        let layout = Layout::array::<T>(self.capacity_).unwrap();
+
+        if self.len_ == 0 {
+            unsafe {
+                self.alloc_.dealloc(self.ptr as *mut u8, layout);
+                self.ptr = core::ptr::null_mut();
+            }
+        } else {
+            unsafe {
+                let new_size = core::mem::size_of::<T>() * self.len_;
+                let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
+                if ptr.is_null() {
+                    let layout = Layout::array::<T>(self.len_).unwrap();
+                    handle_alloc_error(layout);
+                }
+
+                self.ptr = ptr as *mut T;
+            }
+        }
+
+        self.capacity_ = self.len_;
+    }
+
     /// Appends `val` to the end of the buffer.
     pub fn push(&mut self, val: T) {
         assert!(self.len_ < self.capacity_);
@@ -389,5 +418,25 @@ mod tests {
         }
 
         assert_eq!(None, v.pop());
+    }
+
+    #[test]
+    fn shrink_to_fit() {
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
+
+        for i in 0..10 {
+            v.reserve(10);
+
+            for j in 0..i {
+                v.push(GBox::new(j, alloc.clone()));
+            }
+            v.shrink_to_fit();
+            assert_eq!(v.len(), v.capacity());
+
+            v.clear();
+            v.shrink_to_fit();
+            assert_eq!(v.len(), v.capacity());
+        }
     }
 }
