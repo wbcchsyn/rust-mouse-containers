@@ -53,7 +53,7 @@
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::mem::MaybeUninit;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use std::alloc::handle_alloc_error;
 
 /// `Vec` behaves like 'std::vec::Vec' except for the followings.
@@ -136,6 +136,15 @@ where
 
     fn deref(&self) -> &Self::Target {
         unsafe { core::slice::from_raw_parts(self.as_ptr(), self.len()) }
+    }
+}
+
+impl<T, A> DerefMut for Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
     }
 }
 
@@ -492,6 +501,19 @@ mod tests {
         for i in 0..org.len() {
             v.push(org[i].clone());
             assert_eq!(&org[0..=i], v.deref());
+        }
+    }
+
+    #[test]
+    fn deref_mut() {
+        let org: &[GBox<usize>] = &[GBox::from(0), GBox::from(1), GBox::from(2), GBox::from(3)];
+
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+
+        for i in 0..org.len() {
+            v.push(org[i].clone());
+            assert_eq!(&org[0..=i], v.deref_mut());
         }
     }
 }
