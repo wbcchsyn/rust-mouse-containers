@@ -236,6 +236,27 @@ where
 
         self.len_ = 0;
     }
+
+    /// Clones and appends all the elements in `other` to the end of `self` .
+    ///
+    /// # Panics
+    ///
+    /// Panic if `self.len() + other.len()` is greater than the current capacity.
+    pub fn extend_from_slice(&mut self, other: &[T])
+    where
+        T: Clone,
+    {
+        assert!(self.len_ + other.len() <= self.capacity_);
+
+        unsafe {
+            for i in 0..other.len() {
+                let ptr = self.ptr.add(self.len_ + i);
+                ptr.write(other[i].clone());
+            }
+        }
+
+        self.len_ += other.len();
+    }
 }
 
 #[cfg(test)]
@@ -314,5 +335,19 @@ mod tests {
 
         v.clear();
         assert_eq!(true, v.is_empty());
+    }
+
+    #[test]
+    fn extend_from_slice() {
+        let alloc = GAlloc::default();
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+
+        let sl = [GBox::new(0, alloc.clone()), GBox::new(1, alloc.clone())];
+
+        assert_eq!(0, v.len());
+        assert_eq!(10, v.capacity());
+        v.extend_from_slice(&sl);
+        assert_eq!(2, v.len());
+        assert_eq!(10, v.capacity());
     }
 }
