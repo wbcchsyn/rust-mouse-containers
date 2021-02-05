@@ -135,6 +135,17 @@ where
     pub fn alloc(&self) -> &A {
         &self.alloc_
     }
+
+    /// Returns a raw pointer to the buffer.
+    pub fn as_ptr(&self) -> *const T {
+        // It seems that 'std::vec::Vec::as_ptr()' returns nonnull pointer.
+        // This method follows the way.
+        if self.ptr.is_null() {
+            core::mem::align_of::<T>() as *const T
+        } else {
+            self.ptr
+        }
+    }
 }
 
 #[cfg(test)]
