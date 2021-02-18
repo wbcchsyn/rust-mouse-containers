@@ -55,6 +55,7 @@ use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 use spin_sync::{Mutex, Mutex8};
+use std::alloc::handle_alloc_error;
 use std::borrow::Borrow;
 
 /// `RawEntry` is an entry of [`Cache`]
@@ -266,5 +267,80 @@ where
             let (layout, _) = layout0.extend(layout1).unwrap();
             unsafe { alloc.backend().dealloc(self.buckets as *mut u8, layout) };
         }
+    }
+}
+
+impl<T, A, S> BucketChain<T, A, S>
+where
+    A: GlobalAlloc,
+{
+    /// Creates a new instance with `chain_len` count of buckets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chain_len` equals to 0.
+    pub fn new(chain_len: usize, alloc: A, build_hasher: S) -> Self {
+        assert!(0 < chain_len);
+
+        let mutexes_count = (chain_len + Mutex8::LEN - 1) / Mutex8::LEN;
+
+        // Allocating 'mutexes' and 'buckets'
+        let (mutexes, buckets) = {
+            let layout0 = Layout::array::<*mut RawEntry<T>>(chain_len).unwrap();
+            let layout1 = Layout::array::<Mutex8>(mutexes_count).unwrap();
+            let (layout, offset) = layout0.extend(layout1).unwrap();
+
+            let ptr = unsafe { alloc.alloc(layout) };
+            if ptr.is_null() {
+                handle_alloc_error(layout);
+            }
+
+            let mutexes = unsafe { ptr.add(offset) as *mut Mutex8 };
+            let buckets = ptr as *mut *mut RawEntry<T>;
+
+            (mutexes, buckets)
+        };
+
+        // Initializing 'mutexes'
+        for i in 0..mutexes_count {
+            unsafe {
+                let ptr = mutexes.add(i);
+                ptr.write(Mutex8::new());
+            }
+        }
+
+        // Initializing 'buckets'
+        for i in 0..chain_len {
+            unsafe {
+                let ptr = buckets.add(i);
+                ptr.write(null_mut());
+            }
+        }
+
+        let alloc = UnLayoutBulkA::new(Layout::new::<RawEntry<T>>(), alloc);
+
+        Self {
+            mutexes,
+            buckets,
+            len: chain_len,
+            alloc: Mutex::new(alloc),
+            build_hasher,
+        }
+    }
+}
+
+#[cfg(test)]
+mod bucket_chain_tests {
+    use super::*;
+    use gharial::{GAlloc, GBox};
+    use std::collections::hash_map::RandomState;
+
+    type Chain = BucketChain<GBox<usize>, GAlloc, RandomState>;
+
+    #[test]
+    fn new() {
+        let alloc = GAlloc::default();
+        let _chain = Chain::new(1, alloc.clone(), RandomState::new());
+        let _chain = Chain::new(100, alloc.clone(), RandomState::new());
     }
 }
