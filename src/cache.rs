@@ -51,6 +51,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+use core::ptr::null_mut;
 use std::borrow::Borrow;
 
 /// `RawEntry` is an entry of [`Cache`]
@@ -67,6 +68,32 @@ impl<T> RawEntry<T> {
     /// Creates a new instance followed by `tail` .
     pub fn new(val: T, tail: *mut Self) -> Self {
         Self { tail, val }
+    }
+
+    /// Removes `entry` from `bucket` and returns a new bucket excluding `entry`.
+    /// The entries are compared by the address.
+    ///
+    /// # Safety
+    ///
+    /// The behavior is undefined if `bucket` did not include `entry` .
+    pub unsafe fn remove(bucket: *mut Self, entry: &mut Self) -> *mut Self {
+        if bucket == entry {
+            let ret = entry.tail;
+            entry.tail = null_mut();
+            return ret;
+        }
+
+        let mut prev = &mut *bucket;
+        loop {
+            let next = &mut *prev.tail;
+
+            if prev.tail == entry {
+                prev.tail = next.tail;
+                return bucket;
+            }
+
+            prev = next;
+        }
     }
 }
 
@@ -93,7 +120,6 @@ impl<T: ?Sized> RawEntry<T> {
 #[cfg(test)]
 mod raw_entry_tests {
     use super::*;
-    use core::ptr::null_mut;
 
     #[test]
     fn get() {
@@ -118,5 +144,61 @@ mod raw_entry_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn remove() {
+        let mut v = Vec::with_capacity(5);
+        v.push(RawEntry::<usize>::new(0, null_mut()));
+        for i in 1..5 {
+            let tail = &mut v[i - 1] as *mut RawEntry<usize>;
+            v.push(RawEntry::new(i, tail));
+        }
+
+        let mut bucket = &mut v[4] as *mut RawEntry<usize>;
+
+        // [0, 1, 2, 3, 4] -> [1, 2, 3, 4]
+        bucket = unsafe { RawEntry::remove(bucket, &mut v[0]) };
+        for i in &[0] {
+            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+        }
+        for i in &[1, 2, 3, 4] {
+            let ptr = RawEntry::get(bucket, i).unwrap();
+            assert_eq!(*i, unsafe { (&*ptr).val });
+        }
+
+        // [1, 2, 3, 4] -> [1, 2, 3]
+        bucket = unsafe { RawEntry::remove(bucket, &mut v[4]) };
+        for i in &[0, 4] {
+            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+        }
+        for i in &[1, 2, 3] {
+            let ptr = RawEntry::get(bucket, i).unwrap();
+            assert_eq!(*i, unsafe { (&*ptr).val });
+        }
+
+        // [1, 2, 3] -> [1, 3]
+        bucket = unsafe { RawEntry::remove(bucket, &mut v[2]) };
+        for i in &[0, 2, 4] {
+            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+        }
+        for i in &[1, 3] {
+            let ptr = RawEntry::get(bucket, i).unwrap();
+            assert_eq!(*i, unsafe { (&*ptr).val });
+        }
+
+        // [1, 3] -> [3]
+        bucket = unsafe { RawEntry::remove(bucket, &mut v[1]) };
+        for i in &[0, 1, 2, 4] {
+            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+        }
+        for i in &[3] {
+            let ptr = RawEntry::get(bucket, i).unwrap();
+            assert_eq!(*i, unsafe { (&*ptr).val });
+        }
+
+        // [3] -> []
+        bucket = unsafe { RawEntry::remove(bucket, &mut v[3]) };
+        assert_eq!(true, bucket.is_null());
     }
 }
