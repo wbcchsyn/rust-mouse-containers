@@ -396,6 +396,39 @@ where
         RawEntry::get(*bucket, &key).map(|ptr| (guard, &mut *ptr))
     }
 
+    /// Removes `entry` from `self` .
+    ///
+    /// The entries are compared by the pointer address.
+    ///
+    /// # Safety
+    ///
+    /// It may cause a dead lock to call this method while the thread has the lock of the
+    /// `Mutex8Guard` .
+    ///
+    /// The behavior is undefined if `self` did not include `entry` .
+    ///
+    /// It may lead memory unsafety if another thread deallocates `entry` at the same time.
+    ///
+    /// [`Entry`]: struct.Entry.html
+    pub unsafe fn remove(&self, entry: &mut RawEntry<T>)
+    where
+        T: Hash,
+    {
+        // Removing entry from `self` .
+        {
+            let (_guard, bucket) = self.get_bucket(&entry.val);
+            *bucket = RawEntry::remove(*bucket, entry);
+        }
+
+        // Dropping and deallocating 'entry'.
+        {
+            let ptr = entry as *mut RawEntry<T>;
+            ptr.drop_in_place();
+            let alloc = self.alloc.lock().unwrap();
+            alloc.dealloc(ptr as *mut u8, Layout::new::<RawEntry<T>>());
+        }
+    }
+
     /// Acquires the lock and returns a reference to the bucket corresponding to `key` .
     ///
     /// # Safety
@@ -515,6 +548,80 @@ mod bucket_chain_tests {
                 }
 
                 let (_r, _guard, _e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+        }
+    }
+
+    #[test]
+    fn remove() {
+        let alloc = GAlloc::default();
+
+        // bucket count = 1
+        unsafe {
+            let chain = Chain::new(1, alloc.clone(), RandomState::new());
+            let mut entries = Vec::new();
+
+            for i in 0..5 {
+                let (_, _, e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                entries.push(e);
+            }
+
+            // [0, 1, 2, 3, 4] -> [0, 1, 2, 3]
+            chain.remove(entries[4]);
+            for i in &[0, 1, 2, 3] {
+                assert_eq!(true, chain.get(i).is_some());
+            }
+            for i in &[4] {
+                assert_eq!(true, chain.get(i).is_none());
+            }
+
+            // [0, 1, 2, 3] -> [1, 2, 3]
+            chain.remove(entries[0]);
+            for i in &[1, 2, 3] {
+                assert_eq!(true, chain.get(i).is_some());
+            }
+            for i in &[0, 4] {
+                assert_eq!(true, chain.get(i).is_none());
+            }
+
+            // [1, 2, 3] -> [1, 3]
+            chain.remove(entries[2]);
+            for i in &[1, 3] {
+                assert_eq!(true, chain.get(i).is_some());
+            }
+            for i in &[0, 2, 4] {
+                assert_eq!(true, chain.get(i).is_none());
+            }
+
+            // [1, 3] -> [1]
+            chain.remove(entries[3]);
+            for i in &[1] {
+                assert_eq!(true, chain.get(i).is_some());
+            }
+            for i in &[0, 2, 3, 4] {
+                assert_eq!(true, chain.get(i).is_none());
+            }
+
+            // [1] -> []
+            chain.remove(entries[1]);
+            for i in &[0, 1, 2, 3, 4] {
+                assert_eq!(true, chain.get(i).is_none());
+            }
+        }
+
+        // bucket count = 100
+        unsafe {
+            let chain = Chain::new(100, alloc.clone(), RandomState::new());
+            let mut entries = Vec::new();
+
+            for i in 0..100 {
+                let (_, _, e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                entries.push(e);
+            }
+
+            for i in 0..100 {
+                chain.remove(entries[i]);
+                assert_eq!(true, chain.get(&i).is_none());
             }
         }
     }
