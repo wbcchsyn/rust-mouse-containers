@@ -236,3 +236,35 @@ where
     alloc: Mutex<UnLayoutBulkA<A>>,
     build_hasher: S,
 }
+
+impl<T, A, S> Drop for BucketChain<T, A, S>
+where
+    A: GlobalAlloc,
+{
+    fn drop(&mut self) {
+        let alloc = &*self.alloc.lock().unwrap();
+        let mutexes_count = (self.len + Mutex8::LEN - 1) / Mutex8::LEN;
+
+        // Dropping and deallocating all the entries.
+        for i in 0..self.len {
+            let bucket = unsafe { *self.buckets.add(i) };
+            RawEntry::destroy(bucket, alloc);
+        }
+
+        // Dropping 'mutexes'
+        for i in 0..mutexes_count {
+            unsafe {
+                let mutex = self.mutexes.add(i);
+                mutex.drop_in_place();
+            }
+        }
+
+        // Deallocating 'mutexes' and 'buckets'
+        {
+            let layout0 = Layout::array::<*mut RawEntry<T>>(self.len).unwrap();
+            let layout1 = Layout::array::<Mutex8>(mutexes_count).unwrap();
+            let (layout, _) = layout0.extend(layout1).unwrap();
+            unsafe { alloc.backend().dealloc(self.buckets as *mut u8, layout) };
+        }
+    }
+}
