@@ -335,6 +335,52 @@ where
     A: GlobalAlloc,
     S: BuildHasher,
 {
+    /// Inserts `val` and returns `(None, lock_guard, new_created_entry)` if `self` did not have
+    /// the element that equals to `val` ; otherwise, i.e. if `self` includes the element that
+    /// equals to `val` , calls `op(holding_element, val)` and returns the pair of
+    /// `Some(op_result)` and the entry holding the element.
+    ///
+    /// # Safety
+    ///
+    /// The behavior is undefined if `op` changes the hash of the element in `self` .
+    ///
+    /// It may cause a dead lock to call this method while the thread owns an instance of
+    /// `Mutex8Guard` .
+    pub unsafe fn insert_with<F, R>(
+        &self,
+        val: T,
+        op: F,
+    ) -> (Option<R>, Mutex8Guard, &mut RawEntry<T>)
+    where
+        T: Eq + Hash,
+        F: FnOnce(&mut T, T) -> R,
+    {
+        let (guard, bucket) = self.get_bucket(&val);
+
+        match RawEntry::get(*bucket, &val) {
+            None => {
+                // Inserting 'val'
+                let layout = Layout::new::<RawEntry<T>>();
+                let alloc = self.alloc.lock().unwrap();
+                let ptr = alloc.alloc(layout) as *mut RawEntry<T>;
+                if ptr.is_null() {
+                    handle_alloc_error(layout);
+                }
+
+                ptr.write(RawEntry::new(val, *bucket));
+                *bucket = ptr;
+
+                (None, guard, &mut *ptr)
+            }
+            Some(ptr) => {
+                // Update the current element.
+                let entry = &mut *ptr;
+                let r = op(&mut entry.val, val);
+                (Some(r), guard, entry)
+            }
+        }
+    }
+
     /// Acquires the lock and returns a reference to the bucket corresponding to `key` .
     ///
     /// # Safety
@@ -366,10 +412,50 @@ mod bucket_chain_tests {
 
     type Chain = BucketChain<GBox<usize>, GAlloc, RandomState>;
 
+    fn op(a: &mut GBox<usize>, b: GBox<usize>) -> usize {
+        assert_eq!(**a, *b);
+        **a
+    }
+
     #[test]
     fn new() {
         let alloc = GAlloc::default();
         let _chain = Chain::new(1, alloc.clone(), RandomState::new());
         let _chain = Chain::new(100, alloc.clone(), RandomState::new());
+    }
+
+    #[test]
+    fn insert_with() {
+        let alloc = GAlloc::default();
+
+        // bucket count = 1
+        unsafe {
+            let chain = Chain::new(1, alloc.clone(), RandomState::new());
+
+            for i in 0..10 {
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(true, r.is_none());
+            }
+
+            for i in 0..10 {
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(i, r.unwrap());
+            }
+        }
+
+        // bucket count = 100
+        unsafe {
+            let chain = Chain::new(100, alloc.clone(), RandomState::new());
+
+            for i in 0..100 {
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(true, r.is_none());
+            }
+
+            for i in 0..100 {
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(i, r.unwrap());
+            }
+        }
     }
 }
