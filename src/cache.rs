@@ -51,7 +51,10 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+use bulk_allocator::UnLayoutBulkA;
+use core::alloc::GlobalAlloc;
 use core::ptr::null_mut;
+use spin_sync::{Mutex, Mutex8};
 use std::borrow::Borrow;
 
 /// `RawEntry` is an entry of [`Cache`]
@@ -201,4 +204,20 @@ mod raw_entry_tests {
         bucket = unsafe { RawEntry::remove(bucket, &mut v[3]) };
         assert_eq!(true, bucket.is_null());
     }
+}
+
+/// `BucketChain` is a thread-safe chaining hash set.
+///
+/// Each bucket includes 0 or more than 0 entries.
+/// Each mutex protect one associated bucket.
+struct BucketChain<T, A, S>
+where
+    A: GlobalAlloc,
+{
+    mutexes: *mut Mutex8,
+    buckets: *mut *mut RawEntry<T>,
+    len: usize,
+
+    alloc: Mutex<UnLayoutBulkA<A>>,
+    build_hasher: S,
 }
