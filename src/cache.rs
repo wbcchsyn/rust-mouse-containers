@@ -53,8 +53,9 @@
 
 use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
+use core::hash::{BuildHasher, Hash, Hasher};
 use core::ptr::null_mut;
-use spin_sync::{Mutex, Mutex8};
+use spin_sync::{Mutex, Mutex8, Mutex8Guard};
 use std::alloc::handle_alloc_error;
 use std::borrow::Borrow;
 
@@ -326,6 +327,34 @@ where
             alloc: Mutex::new(alloc),
             build_hasher,
         }
+    }
+}
+
+impl<T, A, S> BucketChain<T, A, S>
+where
+    A: GlobalAlloc,
+    S: BuildHasher,
+{
+    /// Acquires the lock and returns a reference to the bucket corresponding to `key` .
+    ///
+    /// # Safety
+    ///
+    /// It may cause a dead lock to call this method while the thread has an instance of
+    /// `Mutex8Guard` .
+    unsafe fn get_bucket<K>(&self, key: &K) -> (Mutex8Guard, &mut *mut RawEntry<T>)
+    where
+        K: Hash,
+    {
+        let mut hasher = self.build_hasher.build_hasher();
+        key.hash(&mut hasher);
+        let index = (hasher.finish() as usize) % self.len;
+
+        let mutex = &*self.mutexes.add(index / Mutex8::LEN);
+        let guard = mutex.lock((index % Mutex8::LEN) as u8);
+
+        let bucket = &mut *self.buckets.add(index);
+
+        (guard, bucket)
     }
 }
 
