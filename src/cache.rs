@@ -50,3 +50,13 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
+
+/// `RawEntry` is an entry of [`Cache`]
+///
+/// It forms a forward linked list by itself.
+///
+/// [`Cache`]: struct.Cache.html
+struct RawEntry<T: ?Sized> {
+    tail: *mut Self,
+    val: T,
+}
