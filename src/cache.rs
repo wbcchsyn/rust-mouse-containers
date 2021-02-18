@@ -60,3 +60,10 @@ struct RawEntry<T: ?Sized> {
     tail: *mut Self,
     val: T,
 }
+
+impl<T> RawEntry<T> {
+    /// Creates a new instance followed by `tail` .
+    pub fn new(val: T, tail: *mut Self) -> Self {
+        Self { tail, val }
+    }
+}
