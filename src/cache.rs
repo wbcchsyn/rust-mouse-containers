@@ -52,7 +52,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 use bulk_allocator::UnLayoutBulkA;
-use core::alloc::GlobalAlloc;
+use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 use spin_sync::{Mutex, Mutex8};
 use std::borrow::Borrow;
@@ -96,6 +96,21 @@ impl<T> RawEntry<T> {
             }
 
             prev = next;
+        }
+    }
+
+    /// Drops and deallocates `bucket` and instances following `bucket` .
+    pub fn destroy(bucket: *mut Self, alloc: &dyn GlobalAlloc) {
+        let mut cur = bucket;
+        while !cur.is_null() {
+            unsafe {
+                let ptr = cur;
+                let entry = &mut *ptr;
+                cur = entry.tail;
+
+                ptr.drop_in_place();
+                alloc.dealloc(ptr as *mut u8, Layout::new::<Self>());
+            }
         }
     }
 }
