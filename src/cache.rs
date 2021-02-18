@@ -381,6 +381,21 @@ where
         }
     }
 
+    /// Finds the entry that equals to `key` and returns it with the lock guard if any.
+    ///
+    /// # Safety
+    ///
+    /// It may cause a dead lock to call this method while the thread has an instance of
+    /// `Mutex8Guard` .
+    pub unsafe fn get<K>(&self, key: &K) -> Option<(Mutex8Guard, &mut RawEntry<T>)>
+    where
+        T: Borrow<K>,
+        K: Eq + Hash,
+    {
+        let (guard, bucket) = self.get_bucket(&key);
+        RawEntry::get(*bucket, &key).map(|ptr| (guard, &mut *ptr))
+    }
+
     /// Acquires the lock and returns a reference to the bucket corresponding to `key` .
     ///
     /// # Safety
@@ -455,6 +470,51 @@ mod bucket_chain_tests {
             for i in 0..100 {
                 let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(i, r.unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn get() {
+        let alloc = GAlloc::default();
+
+        // bucket count = 1
+        unsafe {
+            let chain = Chain::new(1, alloc.clone(), RandomState::new());
+
+            for i in 0..10 {
+                for j in 0..10 {
+                    let r = chain.get(&j);
+
+                    if i <= j {
+                        assert_eq!(true, r.is_none());
+                    } else {
+                        let entry = r.unwrap().1;
+                        assert_eq!(j, *entry.val);
+                    }
+                }
+
+                let (_r, _guard, _e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+        }
+
+        // bucket count = 100
+        unsafe {
+            let chain = Chain::new(100, alloc.clone(), RandomState::new());
+
+            for i in 0..100 {
+                for j in 0..100 {
+                    let r = chain.get(&j);
+
+                    if i <= j {
+                        assert_eq!(true, r.is_none());
+                    } else {
+                        let entry = r.unwrap().1;
+                        assert_eq!(j, *entry.val);
+                    }
+                }
+
+                let (_r, _guard, _e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
             }
         }
     }
