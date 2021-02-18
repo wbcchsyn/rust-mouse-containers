@@ -51,6 +51,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+use std::borrow::Borrow;
+
 /// `RawEntry` is an entry of [`Cache`]
 ///
 /// It forms a forward linked list by itself.
@@ -65,5 +67,56 @@ impl<T> RawEntry<T> {
     /// Creates a new instance followed by `tail` .
     pub fn new(val: T, tail: *mut Self) -> Self {
         Self { tail, val }
+    }
+}
+
+impl<T: ?Sized> RawEntry<T> {
+    /// Find the entry that equals to `key` , and returns the pointer if any.
+    pub fn get<K>(bucket: *mut Self, key: &K) -> Option<*mut Self>
+    where
+        T: Borrow<K>,
+        K: Eq,
+    {
+        let mut cur = bucket;
+        while !cur.is_null() {
+            let entry = unsafe { &mut *cur };
+            if entry.val.borrow() == key {
+                return Some(cur);
+            }
+            cur = entry.tail;
+        }
+
+        None
+    }
+}
+
+#[cfg(test)]
+mod raw_entry_tests {
+    use super::*;
+    use core::ptr::null_mut;
+
+    #[test]
+    fn get() {
+        let r = RawEntry::<i32>::get(null_mut(), &1);
+        assert!(true, r.is_none());
+
+        let mut v = Vec::with_capacity(10);
+        v.push(RawEntry::<usize>::new(0, null_mut()));
+        for i in 1..10 {
+            let tail = &mut v[i - 1] as *mut RawEntry<usize>;
+            v.push(RawEntry::new(i, tail));
+        }
+
+        for i in 0..10 {
+            for j in 0..10 {
+                let bucket = &mut v[i];
+                if i < j {
+                    assert_eq!(true, RawEntry::get(bucket, &j).is_none());
+                } else {
+                    let ptr = RawEntry::get(bucket, &j).unwrap();
+                    assert_eq!(j, unsafe { (&*ptr).val });
+                }
+            }
+        }
     }
 }
