@@ -848,3 +848,35 @@ where
     chain: BucketChain<T, A, S>,
     order: Mutex<Order>,
 }
+
+impl<T, A, S> Cache<T, A, S>
+where
+    A: GlobalAlloc,
+{
+    /// Creates a new instance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chain_len` equals to 0.
+    pub fn new(chain_len: usize, alloc: A, build_hasher: S) -> Self {
+        Self {
+            chain: BucketChain::new(chain_len, alloc, build_hasher),
+            order: Mutex::new(Order::new()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use gharial::{GAlloc, GBox};
+    use std::collections::hash_map::RandomState;
+
+    type Cache = super::Cache<GBox<usize>, GAlloc, RandomState>;
+
+    #[test]
+    fn new() {
+        let alloc = GAlloc::default();
+        let _cache = Cache::new(1, alloc.clone(), RandomState::new());
+        let _cache = Cache::new(10, alloc.clone(), RandomState::new());
+    }
+}
