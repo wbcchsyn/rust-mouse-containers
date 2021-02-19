@@ -74,6 +74,13 @@ impl OrderLinks {
             next: null_mut(),
         }
     }
+
+    /// Provides a reference to [`RawEntry`] including `self` as a property.
+    pub fn as_raw_entry<T>(&mut self) -> &mut RawEntry<T> {
+        let ptr = self as *mut OrderLinks;
+        let ptr = ptr as *mut RawEntry<T>;
+        unsafe { &mut *ptr }
+    }
 }
 
 /// `RawEntry` is an entry of [`Cache`]
