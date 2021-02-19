@@ -866,6 +866,8 @@ pub struct Entry<'a, T> {
     order: &'a Mutex<Order>,
 }
 
+unsafe impl<T> Sync for Entry<'_, T> where T: Send {}
+
 impl<T> Deref for Entry<'_, T> {
     type Target = T;
 
