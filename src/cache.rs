@@ -648,3 +648,23 @@ struct Order {
     front: *mut OrderLinks,
     back: *mut OrderLinks,
 }
+
+impl Order {
+    /// Creates a new instance.
+    pub const fn new() -> Self {
+        Self {
+            front: null_mut(),
+            back: null_mut(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod order_tests {
+    use super::*;
+
+    #[test]
+    fn new() {
+        let _order = Order::new();
+    }
+}
