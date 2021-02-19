@@ -840,6 +840,27 @@ mod order_tests {
     }
 }
 
+/// `Entry` is the entry of [`Cache`] .
+///
+/// This instance includes an RAII lock guard.
+/// User can sure that no other thread drops nor modifies the element while the instance is.
+///
+/// # Warnings
+///
+/// Some entries shares the same mutex.
+/// ([`Cache`] adopts chain way to implement hash set, and entries in the same bucket shares the
+/// same mutex.)
+///
+/// It may cause a dead lock to call methods of [`Cache`] while the thread holds an instance of
+/// `Entry` .
+///
+/// [`Cache`]: struct.Cache.html
+pub struct Entry<'a, T> {
+    _guard: Mutex8Guard<'a>,
+    raw: &'a mut RawEntry<T>,
+    order: &'a Mutex<Order>,
+}
+
 /// `Cache` is a thread-safe LRU hash set.
 pub struct Cache<T, A, S>
 where
