@@ -861,6 +861,17 @@ pub struct Entry<'a, T> {
     order: &'a Mutex<Order>,
 }
 
+impl<T> Entry<'_, T> {
+    /// Makes `self` as the 'Most Recently Used (MRU)' element of the [`Cache`] .
+    pub fn to_mru(&self) {
+        unsafe {
+            let link = &mut *self.raw.order.get();
+            let mut order = self.order.lock().unwrap();
+            order.move_to_back(link);
+        }
+    }
+}
+
 /// `Cache` is a thread-safe LRU hash set.
 pub struct Cache<T, A, S>
 where
