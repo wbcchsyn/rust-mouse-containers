@@ -904,6 +904,14 @@ where
 {
 }
 
+unsafe impl<T, A, S> Sync for Cache<T, A, S>
+where
+    T: Send,
+    A: Send + GlobalAlloc,
+    S: Sync,
+{
+}
+
 impl<T, A, S> Cache<T, A, S>
 where
     A: GlobalAlloc,
