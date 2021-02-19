@@ -673,6 +673,8 @@ impl Order {
                         self.front = next;
 
                         // Unlinking 'front' and 'next'.
+                        // (It is necessary to update 'front' to indicate it has already removed
+                        // fromt 'self'.)
                         front.next = null_mut();
                         next.prev = null_mut();
                     }
@@ -700,6 +702,45 @@ impl Order {
             }
             Some(back) => {
                 // 'self' has at least one element.
+                back.next = link;
+                link.prev = back;
+                self.back = link;
+            }
+        }
+    }
+
+    /// Moves `link` to the end of `self` if `link` is in `self` ; otherwise, i.e. if `link` was
+    /// not linked to another, does nothing.
+    ///
+    /// # Safety
+    ///
+    /// The behavior is undefined if `link` belongs to another `Order` instance.
+    pub unsafe fn move_to_back(&mut self, link: &mut OrderLinks) {
+        match link.next.as_mut() {
+            None => {
+                // 'link' is already the end or removed from 'self'.
+                // Do nothing anyway.
+                return;
+            }
+            Some(next) => {
+                // Removing 'link' from 'self'.
+                match link.prev.as_mut() {
+                    None => {
+                        // 'link' is the first element.
+                        self.front = next;
+                        next.prev = null_mut();
+                    }
+                    Some(prev) => {
+                        prev.next = next;
+                        next.prev = prev;
+                    }
+                }
+
+                link.next = null_mut();
+                link.prev = null_mut();
+
+                // Appending link to the end.
+                let back = &mut *self.back;
                 back.next = link;
                 link.prev = back;
                 self.back = link;
@@ -750,5 +791,37 @@ mod order_tests {
         }
 
         assert_eq!(true, order.pop_front().is_none());
+    }
+
+    #[test]
+    fn move_to_back() {
+        let mut order = Order::new();
+
+        let mut v = Vec::new();
+        for _ in 0..3 {
+            v.push(OrderLinks::new());
+        }
+        for link in &mut v {
+            unsafe { order.push_back(link) };
+        }
+
+        unsafe {
+            // [0, 1, 2] -> [0, 1, 2]
+            order.move_to_back(&mut v[2]);
+
+            // [0, 1, 2] -> [1, 2, 0]
+            order.move_to_back(&mut v[0]);
+
+            // [1, 2, 0] -> [1, 0, 2]
+            order.move_to_back(&mut v[2]);
+
+            // [1, 0, 2] -> [0, 2, 1]
+            order.move_to_back(&mut v[1]);
+        }
+
+        for &i in &[0, 2, 1] {
+            let link = order.pop_front().unwrap();
+            assert_eq!(link, &mut v[i] as *mut OrderLinks);
+        }
     }
 }
