@@ -65,6 +65,16 @@ struct OrderLinks {
     next: *mut Self,
 }
 
+impl OrderLinks {
+    /// Creates a new instance not to linked any other instance.
+    pub const fn new() -> Self {
+        Self {
+            prev: null_mut(),
+            next: null_mut(),
+        }
+    }
+}
+
 /// `RawEntry` is an entry of [`Cache`]
 ///
 /// It forms a forward linked list by itself.
