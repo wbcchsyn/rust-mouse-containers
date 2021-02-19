@@ -658,6 +658,31 @@ impl Order {
         }
     }
 
+    /// Pops and returns the front element if any.
+    pub fn pop_front(&mut self) -> Option<*mut OrderLinks> {
+        unsafe {
+            self.front.as_mut().map(|front| {
+                match front.next.as_mut() {
+                    None => {
+                        // 'self' will be empty after this function call.
+                        self.front = null_mut();
+                        self.back = null_mut();
+                    }
+                    Some(next) => {
+                        // At least one element will be left.
+                        self.front = next;
+
+                        // Unlinking 'front' and 'next'.
+                        front.next = null_mut();
+                        next.prev = null_mut();
+                    }
+                }
+
+                front as *mut OrderLinks
+            })
+        }
+    }
+
     /// Appends `link` to the end of `self` .
     ///
     /// # Safety
@@ -704,5 +729,26 @@ mod order_tests {
         for link in &mut v {
             unsafe { order.push_back(link) };
         }
+    }
+
+    #[test]
+    fn pop_front() {
+        let mut order = Order::new();
+
+        let mut v = Vec::new();
+        for _ in 0..10 {
+            v.push(OrderLinks::new());
+        }
+
+        for link in &mut v {
+            unsafe { order.push_back(link) };
+        }
+
+        for i in 0..10 {
+            let link = order.pop_front().unwrap();
+            assert_eq!(link, &mut v[i] as *mut OrderLinks);
+        }
+
+        assert_eq!(true, order.pop_front().is_none());
     }
 }
