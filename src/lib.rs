@@ -55,7 +55,7 @@
 
 #![deny(missing_docs)]
 
-mod cache;
+pub mod cache;
 mod vec;
 
 pub use vec::Vec;
