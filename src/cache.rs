@@ -839,3 +839,12 @@ mod order_tests {
         }
     }
 }
+
+/// `Cache` is a thread-safe LRU hash set.
+pub struct Cache<T, A, S>
+where
+    A: GlobalAlloc,
+{
+    chain: BucketChain<T, A, S>,
+    order: Mutex<Order>,
+}
