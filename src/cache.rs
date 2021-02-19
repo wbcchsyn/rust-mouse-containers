@@ -988,6 +988,31 @@ where
             order: &self.order,
         })
     }
+
+    /// Removes the 'Least Recently Used (LRU)' element and returns true if any, or does nothing
+    /// and returns true.
+    ///
+    /// # Safety
+    ///
+    /// It may cause a dead lock to call this method while the thread has an instance of
+    /// [`Entry`] .
+    ///
+    /// [`Entry`]: struct.Entry.html
+    pub unsafe fn expire(&self) -> bool
+    where
+        T: Hash,
+    {
+        let front = self.order.lock().unwrap().pop_front();
+        match front {
+            None => false,
+            Some(ptr) => {
+                let link = &mut *ptr;
+                let entry = link.as_raw_entry();
+                self.chain.remove(entry);
+                true
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1069,6 +1094,59 @@ mod cache_tests {
                     }
                 }
                 cache.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+        }
+    }
+
+    #[test]
+    fn expire() {
+        let alloc = GAlloc::default();
+
+        unsafe {
+            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            assert_eq!(false, cache.expire());
+
+            for i in 0..10 {
+                cache.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+
+            for i in 0..10 {
+                for j in 0..i {
+                    assert_eq!(true, cache.get(&j).is_none());
+                }
+                for j in i..10 {
+                    assert_eq!(true, cache.get(&j).is_some());
+                }
+                cache.expire();
+            }
+
+            assert_eq!(false, cache.expire());
+            for i in 0..10 {
+                assert_eq!(true, cache.get(&i).is_none());
+            }
+        }
+
+        unsafe {
+            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            assert_eq!(false, cache.expire());
+
+            for i in 0..100 {
+                cache.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+
+            for i in 0..100 {
+                for j in 0..i {
+                    assert_eq!(true, cache.get(&j).is_none());
+                }
+                for j in i..100 {
+                    assert_eq!(true, cache.get(&j).is_some());
+                }
+                cache.expire();
+            }
+
+            assert_eq!(false, cache.expire());
+            for i in 0..100 {
+                assert_eq!(true, cache.get(&i).is_none());
             }
         }
     }
