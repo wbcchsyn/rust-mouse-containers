@@ -51,6 +51,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+//! Module `cache` provides struct `Cache` and the related things.
+
 use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
