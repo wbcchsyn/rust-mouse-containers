@@ -59,6 +59,12 @@ use spin_sync::{Mutex, Mutex8, Mutex8Guard};
 use std::alloc::handle_alloc_error;
 use std::borrow::Borrow;
 
+/// `OrderLinks` is a couple of pointers to form a doubly linked list by itself.
+struct OrderLinks {
+    prev: *mut Self,
+    next: *mut Self,
+}
+
 /// `RawEntry` is an entry of [`Cache`]
 ///
 /// It forms a forward linked list by itself.
