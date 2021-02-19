@@ -896,6 +896,14 @@ where
     order: Mutex<Order>,
 }
 
+unsafe impl<T, A, S> Send for Cache<T, A, S>
+where
+    T: Send,
+    A: Send + GlobalAlloc,
+    S: Send,
+{
+}
+
 impl<T, A, S> Cache<T, A, S>
 where
     A: GlobalAlloc,
