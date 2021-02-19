@@ -81,6 +81,7 @@ impl OrderLinks {
 /// It forms a forward linked list by itself.
 ///
 /// [`Cache`]: struct.Cache.html
+#[repr(C)]
 struct RawEntry<T: ?Sized> {
     order: UnsafeCell<OrderLinks>,
     tail: *mut Self,
