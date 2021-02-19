@@ -642,3 +642,9 @@ mod bucket_chain_tests {
         }
     }
 }
+
+/// `Ordre` is a doubly linked list of [`OrderLinks`] to hold the order.
+struct Order {
+    front: *mut OrderLinks,
+    back: *mut OrderLinks,
+}
