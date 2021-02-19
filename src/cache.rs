@@ -55,6 +55,7 @@ use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
 use core::hash::{BuildHasher, Hash, Hasher};
+use core::ops::Deref;
 use core::ptr::null_mut;
 use spin_sync::{Mutex, Mutex8, Mutex8Guard};
 use std::alloc::handle_alloc_error;
@@ -845,6 +846,8 @@ mod order_tests {
 /// This instance includes an RAII lock guard.
 /// User can sure that no other thread drops nor modifies the element while the instance is.
 ///
+/// User can access to the element via the `Deref` implementation.
+///
 /// # Warnings
 ///
 /// Some entries shares the same mutex.
@@ -859,6 +862,14 @@ pub struct Entry<'a, T> {
     _guard: Mutex8Guard<'a>,
     raw: &'a mut RawEntry<T>,
     order: &'a Mutex<Order>,
+}
+
+impl<T> Deref for Entry<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.raw.val
+    }
 }
 
 impl<T> Entry<'_, T> {
