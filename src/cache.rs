@@ -53,6 +53,7 @@
 
 use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
+use core::cell::UnsafeCell;
 use core::hash::{BuildHasher, Hash, Hasher};
 use core::ptr::null_mut;
 use spin_sync::{Mutex, Mutex8, Mutex8Guard};
@@ -81,6 +82,7 @@ impl OrderLinks {
 ///
 /// [`Cache`]: struct.Cache.html
 struct RawEntry<T: ?Sized> {
+    order: UnsafeCell<OrderLinks>,
     tail: *mut Self,
     val: T,
 }
@@ -88,7 +90,11 @@ struct RawEntry<T: ?Sized> {
 impl<T> RawEntry<T> {
     /// Creates a new instance followed by `tail` .
     pub fn new(val: T, tail: *mut Self) -> Self {
-        Self { tail, val }
+        Self {
+            order: UnsafeCell::new(OrderLinks::new()),
+            tail,
+            val,
+        }
     }
 
     /// Removes `entry` from `bucket` and returns a new bucket excluding `entry`.
