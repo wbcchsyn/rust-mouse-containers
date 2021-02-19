@@ -963,6 +963,31 @@ where
             }
         }
     }
+
+    /// Finds an element that equals to `key` and returns the entry if any.
+    ///
+    /// Note that this method will not made the entry the 'Most Recently Used (MRU).'
+    /// Call [`Entry.to_mru`] if necessary
+    ///
+    ///
+    /// # Safety
+    ///
+    /// It may cause a dead lock to call this method while the thread owns an instance of
+    /// [`Entry`] .
+    ///
+    /// [`Entry`]: struct.Entry.html
+    /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
+    pub unsafe fn get<K>(&self, key: &K) -> Option<Entry<T>>
+    where
+        T: Borrow<K>,
+        K: Eq + Hash,
+    {
+        self.chain.get(key).map(|(guard, raw)| Entry {
+            _guard: guard,
+            raw,
+            order: &self.order,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -1009,6 +1034,41 @@ mod cache_tests {
             for i in 0..100 {
                 let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(Some(i), r);
+            }
+        }
+    }
+
+    #[test]
+    fn get() {
+        let alloc = GAlloc::default();
+
+        unsafe {
+            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            for i in 0..10 {
+                for j in 0..10 {
+                    let r = cache.get(&j);
+                    if j < i {
+                        assert_eq!(j, **r.unwrap());
+                    } else {
+                        assert_eq!(true, r.is_none());
+                    }
+                }
+                cache.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+        }
+
+        unsafe {
+            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            for i in 0..100 {
+                for j in 0..100 {
+                    let r = cache.get(&j);
+                    if j < i {
+                        assert_eq!(j, **r.unwrap());
+                    } else {
+                        assert_eq!(true, r.is_none());
+                    }
+                }
+                cache.insert_with(GBox::new(i, alloc.clone()), op);
             }
         }
     }
