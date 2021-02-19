@@ -657,6 +657,30 @@ impl Order {
             back: null_mut(),
         }
     }
+
+    /// Appends `link` to the end of `self` .
+    ///
+    /// # Safety
+    ///
+    /// `link` must not be linked to another.
+    pub unsafe fn push_back(&mut self, link: &mut OrderLinks) {
+        debug_assert_eq!(true, link.prev.is_null());
+        debug_assert_eq!(true, link.next.is_null());
+
+        match self.back.as_mut() {
+            None => {
+                // 'self' was empty and 'link' will be the first element.
+                self.front = link;
+                self.back = link;
+            }
+            Some(back) => {
+                // 'self' has at least one element.
+                back.next = link;
+                link.prev = back;
+                self.back = link;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -666,5 +690,19 @@ mod order_tests {
     #[test]
     fn new() {
         let _order = Order::new();
+    }
+
+    #[test]
+    fn push_back() {
+        let mut order = Order::new();
+
+        let mut v = Vec::new();
+        for _ in 0..10 {
+            v.push(OrderLinks::new());
+        }
+
+        for link in &mut v {
+            unsafe { order.push_back(link) };
+        }
     }
 }
