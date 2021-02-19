@@ -898,6 +898,62 @@ where
     }
 }
 
+impl<T, A, S> Cache<T, A, S>
+where
+    A: GlobalAlloc,
+    S: BuildHasher,
+{
+    /// Inserts `val` as the 'Most Recently Used (MRU)' element and returns `(None, new_entry)` if
+    /// `val` is new to `self` (i.e. if `self` did not have such an element that equals to `val` .)
+    ///
+    /// Otherwise, i.e. if `self` had the element that equals to `val` , calls
+    /// `op(holding_element, val)` and returns the result of `op` and the entry.
+    ///
+    /// Note that if `self` had `val` , this method will not make the entry the
+    /// 'Most Recently Used (MRU)'.
+    /// Call [`Entry.to_mru`] if necessary.
+    ///
+    /// # Safety
+    ///
+    /// The behavior is undefined if `op` changes the hash of the element in `self` .
+    ///
+    /// It may cause a dead lock to call this method while the thread owns an instance of
+    /// [`Entry`] .
+    ///
+    /// [`Entry`]: struct.Entry.html
+    /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
+    pub unsafe fn insert_with<F, R>(&self, val: T, op: F) -> (Option<R>, Entry<T>)
+    where
+        T: Eq + Hash,
+        F: FnOnce(&mut T, T) -> R,
+    {
+        match self.chain.insert_with(val, op) {
+            (None, guard, raw) => {
+                let link = &mut *raw.order.get();
+                let mut order = self.order.lock().unwrap();
+                order.push_back(link);
+
+                let entry = Entry {
+                    _guard: guard,
+                    raw,
+                    order: &self.order,
+                };
+
+                (None, entry)
+            }
+            (Some(r), guard, raw) => {
+                let entry = Entry {
+                    _guard: guard,
+                    raw,
+                    order: &self.order,
+                };
+
+                (Some(r), entry)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod cache_tests {
     use gharial::{GAlloc, GBox};
@@ -905,10 +961,44 @@ mod cache_tests {
 
     type Cache = super::Cache<GBox<usize>, GAlloc, RandomState>;
 
+    fn op(a: &mut GBox<usize>, b: GBox<usize>) -> usize {
+        assert_eq!(**a, *b);
+        *b
+    }
+
     #[test]
     fn new() {
         let alloc = GAlloc::default();
         let _cache = Cache::new(1, alloc.clone(), RandomState::new());
         let _cache = Cache::new(10, alloc.clone(), RandomState::new());
+    }
+
+    #[test]
+    fn insert_with() {
+        let alloc = GAlloc::default();
+
+        unsafe {
+            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            for i in 0..10 {
+                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(None, r);
+            }
+            for i in 0..10 {
+                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(Some(i), r);
+            }
+        }
+
+        unsafe {
+            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            for i in 0..100 {
+                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(None, r);
+            }
+            for i in 0..100 {
+                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                assert_eq!(Some(i), r);
+            }
+        }
     }
 }
