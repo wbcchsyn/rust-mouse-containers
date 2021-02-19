@@ -1150,4 +1150,99 @@ mod cache_tests {
             }
         }
     }
+
+    #[test]
+    fn move_to_back() {
+        let alloc = GAlloc::default();
+
+        unsafe {
+            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            assert_eq!(false, cache.expire());
+
+            for i in 0..3 {
+                cache.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+
+            // [0, 1, 2] -> [0, 1, 2]
+            {
+                let e = cache.get(&2).unwrap();
+                e.to_mru();
+            }
+
+            // [0, 1, 2] -> [1, 2, 0]
+            {
+                let e = cache.get(&0).unwrap();
+                e.to_mru();
+            }
+
+            // [1, 2, 0] -> [1, 0, 2]
+            {
+                let e = cache.get(&2).unwrap();
+                e.to_mru();
+            }
+
+            // [1, 0, 2] -> [0, 2]
+            cache.expire();
+            assert_eq!(true, cache.get(&1).is_none());
+            assert_eq!(true, cache.get(&0).is_some());
+            assert_eq!(true, cache.get(&2).is_some());
+
+            // [0, 2] -> [2]
+            cache.expire();
+            assert_eq!(true, cache.get(&1).is_none());
+            assert_eq!(true, cache.get(&0).is_none());
+            assert_eq!(true, cache.get(&2).is_some());
+
+            // [2] -> []
+            cache.expire();
+            assert_eq!(true, cache.get(&1).is_none());
+            assert_eq!(true, cache.get(&0).is_none());
+            assert_eq!(true, cache.get(&2).is_none());
+        }
+
+        unsafe {
+            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            assert_eq!(false, cache.expire());
+
+            for i in 0..3 {
+                cache.insert_with(GBox::new(i, alloc.clone()), op);
+            }
+
+            // [0, 1, 2] -> [0, 1, 2]
+            {
+                let e = cache.get(&2).unwrap();
+                e.to_mru();
+            }
+
+            // [0, 1, 2] -> [1, 2, 0]
+            {
+                let e = cache.get(&0).unwrap();
+                e.to_mru();
+            }
+
+            // [1, 2, 0] -> [1, 0, 2]
+            {
+                let e = cache.get(&2).unwrap();
+                e.to_mru();
+            }
+
+            // [1, 0, 2] -> [0, 2]
+            cache.expire();
+            assert_eq!(true, cache.get(&1).is_none());
+            assert_eq!(true, cache.get(&0).is_some());
+            assert_eq!(true, cache.get(&2).is_some());
+
+            // [0, 2] -> [2]
+            cache.expire();
+            assert_eq!(true, cache.get(&1).is_none());
+            assert_eq!(true, cache.get(&0).is_none());
+            assert_eq!(true, cache.get(&2).is_some());
+
+            // [2] -> []
+            cache.expire();
+            assert_eq!(true, cache.get(&1).is_none());
+            assert_eq!(true, cache.get(&0).is_none());
+            assert_eq!(true, cache.get(&2).is_none());
+        }
+    }
 }
