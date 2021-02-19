@@ -9,6 +9,8 @@ edition = "2018"
 license = "LGPL-3.0-or-later OR Apache-2.0 OR BSD-2-Clause"
 
 [dependencies]
+spin-sync = "0.3"
+bulk_allocator = "0.3"
 
 [dev-dependencies]
 gharial = "0.3"
