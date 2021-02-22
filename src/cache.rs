@@ -968,6 +968,15 @@ where
             order: Mutex::new(Order::new()),
         }
     }
+
+    /// Initializes `self` and make `self` ready for use.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chain_len` equals to 0, or if `self` has already been initialized.
+    pub fn init(&mut self, chain_len: usize) {
+        self.chain.init(chain_len);
+    }
 }
 
 impl<T, A, S> Cache<T, A, S>
