@@ -1101,6 +1101,20 @@ mod cache_tests {
     }
 
     #[test]
+    fn init() {
+        let alloc = GAlloc::default();
+        {
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(1);
+        }
+
+        {
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(100);
+        }
+    }
+
+    #[test]
     fn insert_with() {
         let alloc = GAlloc::default();
 
