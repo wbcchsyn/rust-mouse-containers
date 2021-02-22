@@ -51,7 +51,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-//! Module `cache` provides struct `Cache` and the related things.
+//! Module `lru_hash_set` provides struct `LruHashSet` and the related things.
 
 use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
@@ -86,11 +86,11 @@ impl OrderLinks {
     }
 }
 
-/// `RawEntry` is an entry of [`Cache`]
+/// `RawEntry` is an entry of [`LruHashSet`]
 ///
 /// It forms a forward linked list by itself.
 ///
-/// [`Cache`]: struct.Cache.html
+/// [`LruHashSet`]: struct.LruHashSet.html
 #[repr(C)]
 struct RawEntry<T: ?Sized> {
     order: UnsafeCell<OrderLinks>,
@@ -881,7 +881,7 @@ mod order_tests {
     }
 }
 
-/// `Entry` is the entry of [`Cache`] .
+/// `Entry` is the entry of [`LruHashSet`] .
 ///
 /// This instance includes an RAII lock guard.
 /// User can sure that no other thread drops nor modifies the element while the instance is.
@@ -891,13 +891,13 @@ mod order_tests {
 /// # Warnings
 ///
 /// Some entries shares the same mutex.
-/// ([`Cache`] adopts chain way to implement hash set, and entries in the same bucket shares the
-/// same mutex.)
+/// ([`LruHashSet`] adopts chain way to implement hash set, and entries in the same bucket shares
+/// the same mutex.)
 ///
-/// It may cause a dead lock to call methods of [`Cache`] while the thread holds an instance of
-/// `Entry` .
+/// It may cause a dead lock to call methods of [`LruHashSet`] while the thread holds an instance
+/// of `Entry` .
 ///
-/// [`Cache`]: struct.Cache.html
+/// [`LruHashSet`]: struct.LruHashSet.html
 pub struct Entry<'a, T> {
     _guard: Mutex8Guard<'a>,
     raw: &'a mut RawEntry<T>,
@@ -915,7 +915,7 @@ impl<T> Deref for Entry<'_, T> {
 }
 
 impl<T> Entry<'_, T> {
-    /// Makes `self` as the 'Most Recently Used (MRU)' element of the [`Cache`] .
+    /// Makes `self` as the 'Most Recently Used (MRU)' element of the [`LruHashSet`] .
     pub fn to_mru(&self) {
         unsafe {
             let link = &mut *self.raw.order.get();
@@ -925,8 +925,8 @@ impl<T> Entry<'_, T> {
     }
 }
 
-/// `Cache` is a thread-safe LRU hash set.
-pub struct Cache<T, A, S>
+/// `LruHashSet` is a thread-safe LRU hash set.
+pub struct LruHashSet<T, A, S>
 where
     A: GlobalAlloc,
 {
@@ -934,7 +934,7 @@ where
     order: Mutex<Order>,
 }
 
-unsafe impl<T, A, S> Send for Cache<T, A, S>
+unsafe impl<T, A, S> Send for LruHashSet<T, A, S>
 where
     T: Send,
     A: Send + GlobalAlloc,
@@ -942,7 +942,7 @@ where
 {
 }
 
-unsafe impl<T, A, S> Sync for Cache<T, A, S>
+unsafe impl<T, A, S> Sync for LruHashSet<T, A, S>
 where
     T: Send,
     A: Send + GlobalAlloc,
@@ -950,7 +950,7 @@ where
 {
 }
 
-impl<T, A, S> Cache<T, A, S>
+impl<T, A, S> LruHashSet<T, A, S>
 where
     A: GlobalAlloc,
 {
@@ -976,7 +976,7 @@ where
     }
 }
 
-impl<T, A, S> Cache<T, A, S>
+impl<T, A, S> LruHashSet<T, A, S>
 where
     A: GlobalAlloc,
     S: BuildHasher,
@@ -1083,11 +1083,11 @@ where
 }
 
 #[cfg(test)]
-mod cache_tests {
+mod lru_hash_set_tests {
     use gharial::{GAlloc, GBox};
     use std::collections::hash_map::RandomState;
 
-    type Cache = super::Cache<GBox<usize>, GAlloc, RandomState>;
+    type LruHashSet = super::LruHashSet<GBox<usize>, GAlloc, RandomState>;
 
     fn op(a: &mut GBox<usize>, b: GBox<usize>) -> usize {
         assert_eq!(**a, *b);
@@ -1097,20 +1097,20 @@ mod cache_tests {
     #[test]
     fn new() {
         let alloc = GAlloc::default();
-        let _cache = Cache::new(alloc.clone(), RandomState::new());
+        let _hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
     }
 
     #[test]
     fn init() {
         let alloc = GAlloc::default();
         {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(1);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(1);
         }
 
         {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(100);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(100);
         }
     }
 
@@ -1119,29 +1119,29 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(1);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(1);
 
             for i in 0..10 {
-                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(None, r);
             }
             for i in 0..10 {
-                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(Some(i), r);
             }
         }
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(100);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(100);
 
             for i in 0..100 {
-                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(None, r);
             }
             for i in 0..100 {
-                let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(Some(i), r);
             }
         }
@@ -1152,36 +1152,36 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(1);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(1);
 
             for i in 0..10 {
                 for j in 0..10 {
-                    let r = cache.get(&j);
+                    let r = hash_set.get(&j);
                     if j < i {
                         assert_eq!(j, **r.unwrap());
                     } else {
                         assert_eq!(true, r.is_none());
                     }
                 }
-                cache.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
             }
         }
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(100);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(100);
 
             for i in 0..100 {
                 for j in 0..100 {
-                    let r = cache.get(&j);
+                    let r = hash_set.get(&j);
                     if j < i {
                         assert_eq!(j, **r.unwrap());
                     } else {
                         assert_eq!(true, r.is_none());
                     }
                 }
-                cache.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
             }
         }
     }
@@ -1191,54 +1191,54 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(1);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(1);
 
-            assert_eq!(false, cache.expire());
+            assert_eq!(false, hash_set.expire());
 
             for i in 0..10 {
-                cache.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
             }
 
             for i in 0..10 {
                 for j in 0..i {
-                    assert_eq!(true, cache.get(&j).is_none());
+                    assert_eq!(true, hash_set.get(&j).is_none());
                 }
                 for j in i..10 {
-                    assert_eq!(true, cache.get(&j).is_some());
+                    assert_eq!(true, hash_set.get(&j).is_some());
                 }
-                cache.expire();
+                hash_set.expire();
             }
 
-            assert_eq!(false, cache.expire());
+            assert_eq!(false, hash_set.expire());
             for i in 0..10 {
-                assert_eq!(true, cache.get(&i).is_none());
+                assert_eq!(true, hash_set.get(&i).is_none());
             }
         }
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(100);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(100);
 
-            assert_eq!(false, cache.expire());
+            assert_eq!(false, hash_set.expire());
 
             for i in 0..100 {
-                cache.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
             }
 
             for i in 0..100 {
                 for j in 0..i {
-                    assert_eq!(true, cache.get(&j).is_none());
+                    assert_eq!(true, hash_set.get(&j).is_none());
                 }
                 for j in i..100 {
-                    assert_eq!(true, cache.get(&j).is_some());
+                    assert_eq!(true, hash_set.get(&j).is_some());
                 }
-                cache.expire();
+                hash_set.expire();
             }
 
-            assert_eq!(false, cache.expire());
+            assert_eq!(false, hash_set.expire());
             for i in 0..100 {
-                assert_eq!(true, cache.get(&i).is_none());
+                assert_eq!(true, hash_set.get(&i).is_none());
             }
         }
     }
@@ -1248,97 +1248,97 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(1);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(1);
 
-            assert_eq!(false, cache.expire());
+            assert_eq!(false, hash_set.expire());
 
             for i in 0..3 {
-                cache.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
             }
 
             // [0, 1, 2] -> [0, 1, 2]
             {
-                let e = cache.get(&2).unwrap();
+                let e = hash_set.get(&2).unwrap();
                 e.to_mru();
             }
 
             // [0, 1, 2] -> [1, 2, 0]
             {
-                let e = cache.get(&0).unwrap();
+                let e = hash_set.get(&0).unwrap();
                 e.to_mru();
             }
 
             // [1, 2, 0] -> [1, 0, 2]
             {
-                let e = cache.get(&2).unwrap();
+                let e = hash_set.get(&2).unwrap();
                 e.to_mru();
             }
 
             // [1, 0, 2] -> [0, 2]
-            cache.expire();
-            assert_eq!(true, cache.get(&1).is_none());
-            assert_eq!(true, cache.get(&0).is_some());
-            assert_eq!(true, cache.get(&2).is_some());
+            hash_set.expire();
+            assert_eq!(true, hash_set.get(&1).is_none());
+            assert_eq!(true, hash_set.get(&0).is_some());
+            assert_eq!(true, hash_set.get(&2).is_some());
 
             // [0, 2] -> [2]
-            cache.expire();
-            assert_eq!(true, cache.get(&1).is_none());
-            assert_eq!(true, cache.get(&0).is_none());
-            assert_eq!(true, cache.get(&2).is_some());
+            hash_set.expire();
+            assert_eq!(true, hash_set.get(&1).is_none());
+            assert_eq!(true, hash_set.get(&0).is_none());
+            assert_eq!(true, hash_set.get(&2).is_some());
 
             // [2] -> []
-            cache.expire();
-            assert_eq!(true, cache.get(&1).is_none());
-            assert_eq!(true, cache.get(&0).is_none());
-            assert_eq!(true, cache.get(&2).is_none());
+            hash_set.expire();
+            assert_eq!(true, hash_set.get(&1).is_none());
+            assert_eq!(true, hash_set.get(&0).is_none());
+            assert_eq!(true, hash_set.get(&2).is_none());
         }
 
         unsafe {
-            let mut cache = Cache::new(alloc.clone(), RandomState::new());
-            cache.init(100);
+            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            hash_set.init(100);
 
-            assert_eq!(false, cache.expire());
+            assert_eq!(false, hash_set.expire());
 
             for i in 0..3 {
-                cache.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
             }
 
             // [0, 1, 2] -> [0, 1, 2]
             {
-                let e = cache.get(&2).unwrap();
+                let e = hash_set.get(&2).unwrap();
                 e.to_mru();
             }
 
             // [0, 1, 2] -> [1, 2, 0]
             {
-                let e = cache.get(&0).unwrap();
+                let e = hash_set.get(&0).unwrap();
                 e.to_mru();
             }
 
             // [1, 2, 0] -> [1, 0, 2]
             {
-                let e = cache.get(&2).unwrap();
+                let e = hash_set.get(&2).unwrap();
                 e.to_mru();
             }
 
             // [1, 0, 2] -> [0, 2]
-            cache.expire();
-            assert_eq!(true, cache.get(&1).is_none());
-            assert_eq!(true, cache.get(&0).is_some());
-            assert_eq!(true, cache.get(&2).is_some());
+            hash_set.expire();
+            assert_eq!(true, hash_set.get(&1).is_none());
+            assert_eq!(true, hash_set.get(&0).is_some());
+            assert_eq!(true, hash_set.get(&2).is_some());
 
             // [0, 2] -> [2]
-            cache.expire();
-            assert_eq!(true, cache.get(&1).is_none());
-            assert_eq!(true, cache.get(&0).is_none());
-            assert_eq!(true, cache.get(&2).is_some());
+            hash_set.expire();
+            assert_eq!(true, hash_set.get(&1).is_none());
+            assert_eq!(true, hash_set.get(&0).is_none());
+            assert_eq!(true, hash_set.get(&2).is_some());
 
             // [2] -> []
-            cache.expire();
-            assert_eq!(true, cache.get(&1).is_none());
-            assert_eq!(true, cache.get(&0).is_none());
-            assert_eq!(true, cache.get(&2).is_none());
+            hash_set.expire();
+            assert_eq!(true, hash_set.get(&1).is_none());
+            assert_eq!(true, hash_set.get(&0).is_none());
+            assert_eq!(true, hash_set.get(&2).is_none());
         }
     }
 }

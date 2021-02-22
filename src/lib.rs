@@ -55,7 +55,7 @@
 
 #![deny(missing_docs)]
 
-pub mod cache;
+pub mod lru_hash_set;
 mod vec;
 
 pub use vec::Vec;
