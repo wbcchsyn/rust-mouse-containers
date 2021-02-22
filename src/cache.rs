@@ -524,6 +524,20 @@ mod bucket_chain_tests {
     }
 
     #[test]
+    fn init() {
+        let alloc = GAlloc::default();
+        {
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(1);
+        }
+
+        {
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(100);
+        }
+    }
+
+    #[test]
     fn insert_with() {
         let alloc = GAlloc::default();
 
