@@ -277,6 +277,11 @@ where
     A: GlobalAlloc,
 {
     fn drop(&mut self) {
+        // Do nothing if `self` is not initialized yet.
+        if self.len == 0 {
+            return;
+        }
+
         let alloc = &*self.alloc.lock().unwrap();
         let mutexes_count = (self.len + Mutex8::LEN - 1) / Mutex8::LEN;
 
