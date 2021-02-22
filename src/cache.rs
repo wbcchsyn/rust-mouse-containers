@@ -277,6 +277,11 @@ where
     A: GlobalAlloc,
 {
     fn drop(&mut self) {
+        // Do nothing if `self` is not initialized yet.
+        if self.len == 0 {
+            return;
+        }
+
         let alloc = &*self.alloc.lock().unwrap();
         let mutexes_count = (self.len + Mutex8::LEN - 1) / Mutex8::LEN;
 
@@ -308,15 +313,35 @@ impl<T, A, S> BucketChain<T, A, S>
 where
     A: GlobalAlloc,
 {
-    /// Creates a new instance with `chain_len` count of buckets.
+    /// Creates a new instance without initialization.
+    ///
+    /// The instance is not ready for use before method [`init`] is called.
+    pub fn new(alloc: A, build_hasher: S) -> Self {
+        let alloc = UnLayoutBulkA::new(Layout::new::<RawEntry<T>>(), alloc);
+
+        Self {
+            mutexes: null_mut(),
+            buckets: null_mut(),
+            len: 0,
+            alloc: Mutex::new(alloc),
+            build_hasher,
+        }
+    }
+
+    /// Allocates `chain_len` count of buckets and mutexes, and initializes `self` .
     ///
     /// # Panics
     ///
-    /// Panics if `chain_len` equals to 0.
-    pub fn new(chain_len: usize, alloc: A, build_hasher: S) -> Self {
+    /// Panics if `chain_len` equals to 0, or if `self` has already initialized.
+    pub fn init(&mut self, chain_len: usize) {
         assert!(0 < chain_len);
+        assert_eq!(0, self.len);
+        debug_assert_eq!(true, self.mutexes.is_null());
+        debug_assert_eq!(true, self.buckets.is_null());
 
         let mutexes_count = (chain_len + Mutex8::LEN - 1) / Mutex8::LEN;
+        let alloc = self.alloc.lock().unwrap();
+        let alloc = alloc.backend();
 
         // Allocating 'mutexes' and 'buckets'
         let (mutexes, buckets) = {
@@ -351,15 +376,9 @@ where
             }
         }
 
-        let alloc = UnLayoutBulkA::new(Layout::new::<RawEntry<T>>(), alloc);
-
-        Self {
-            mutexes,
-            buckets,
-            len: chain_len,
-            alloc: Mutex::new(alloc),
-            build_hasher,
-        }
+        self.mutexes = mutexes;
+        self.buckets = buckets;
+        self.len = chain_len;
     }
 }
 
@@ -501,8 +520,21 @@ mod bucket_chain_tests {
     #[test]
     fn new() {
         let alloc = GAlloc::default();
-        let _chain = Chain::new(1, alloc.clone(), RandomState::new());
-        let _chain = Chain::new(100, alloc.clone(), RandomState::new());
+        let _chain = Chain::new(alloc.clone(), RandomState::new());
+    }
+
+    #[test]
+    fn init() {
+        let alloc = GAlloc::default();
+        {
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(1);
+        }
+
+        {
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(100);
+        }
     }
 
     #[test]
@@ -511,7 +543,8 @@ mod bucket_chain_tests {
 
         // bucket count = 1
         unsafe {
-            let chain = Chain::new(1, alloc.clone(), RandomState::new());
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(1);
 
             for i in 0..10 {
                 let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
@@ -526,7 +559,8 @@ mod bucket_chain_tests {
 
         // bucket count = 100
         unsafe {
-            let chain = Chain::new(100, alloc.clone(), RandomState::new());
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(100);
 
             for i in 0..100 {
                 let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
@@ -546,7 +580,8 @@ mod bucket_chain_tests {
 
         // bucket count = 1
         unsafe {
-            let chain = Chain::new(1, alloc.clone(), RandomState::new());
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(1);
 
             for i in 0..10 {
                 for j in 0..10 {
@@ -566,7 +601,8 @@ mod bucket_chain_tests {
 
         // bucket count = 100
         unsafe {
-            let chain = Chain::new(100, alloc.clone(), RandomState::new());
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(100);
 
             for i in 0..100 {
                 for j in 0..100 {
@@ -591,7 +627,8 @@ mod bucket_chain_tests {
 
         // bucket count = 1
         unsafe {
-            let chain = Chain::new(1, alloc.clone(), RandomState::new());
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(1);
             let mut entries = Vec::new();
 
             for i in 0..5 {
@@ -644,7 +681,8 @@ mod bucket_chain_tests {
 
         // bucket count = 100
         unsafe {
-            let chain = Chain::new(100, alloc.clone(), RandomState::new());
+            let mut chain = Chain::new(alloc.clone(), RandomState::new());
+            chain.init(100);
             let mut entries = Vec::new();
 
             for i in 0..100 {
@@ -916,16 +954,25 @@ impl<T, A, S> Cache<T, A, S>
 where
     A: GlobalAlloc,
 {
-    /// Creates a new instance.
+    /// Creates a new instance without initialization.
+    ///
+    /// The instance is not ready for use till method [`init`] is called.
+    ///
+    /// [`init`]: #method.init
+    pub fn new(alloc: A, build_hasher: S) -> Self {
+        Self {
+            chain: BucketChain::new(alloc, build_hasher),
+            order: Mutex::new(Order::new()),
+        }
+    }
+
+    /// Initializes `self` and make `self` ready for use.
     ///
     /// # Panics
     ///
-    /// Panics if `chain_len` equals to 0.
-    pub fn new(chain_len: usize, alloc: A, build_hasher: S) -> Self {
-        Self {
-            chain: BucketChain::new(chain_len, alloc, build_hasher),
-            order: Mutex::new(Order::new()),
-        }
+    /// Panics if `chain_len` equals to 0, or if `self` has already been initialized.
+    pub fn init(&mut self, chain_len: usize) {
+        self.chain.init(chain_len);
     }
 }
 
@@ -1050,8 +1097,21 @@ mod cache_tests {
     #[test]
     fn new() {
         let alloc = GAlloc::default();
-        let _cache = Cache::new(1, alloc.clone(), RandomState::new());
-        let _cache = Cache::new(10, alloc.clone(), RandomState::new());
+        let _cache = Cache::new(alloc.clone(), RandomState::new());
+    }
+
+    #[test]
+    fn init() {
+        let alloc = GAlloc::default();
+        {
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(1);
+        }
+
+        {
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(100);
+        }
     }
 
     #[test]
@@ -1059,7 +1119,9 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(1);
+
             for i in 0..10 {
                 let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(None, r);
@@ -1071,7 +1133,9 @@ mod cache_tests {
         }
 
         unsafe {
-            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(100);
+
             for i in 0..100 {
                 let (r, _) = cache.insert_with(GBox::new(i, alloc.clone()), op);
                 assert_eq!(None, r);
@@ -1088,7 +1152,9 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(1);
+
             for i in 0..10 {
                 for j in 0..10 {
                     let r = cache.get(&j);
@@ -1103,7 +1169,9 @@ mod cache_tests {
         }
 
         unsafe {
-            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(100);
+
             for i in 0..100 {
                 for j in 0..100 {
                     let r = cache.get(&j);
@@ -1123,7 +1191,9 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(1);
+
             assert_eq!(false, cache.expire());
 
             for i in 0..10 {
@@ -1147,7 +1217,9 @@ mod cache_tests {
         }
 
         unsafe {
-            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(100);
+
             assert_eq!(false, cache.expire());
 
             for i in 0..100 {
@@ -1176,7 +1248,9 @@ mod cache_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let cache = Cache::new(1, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(1);
+
             assert_eq!(false, cache.expire());
 
             for i in 0..3 {
@@ -1221,7 +1295,9 @@ mod cache_tests {
         }
 
         unsafe {
-            let cache = Cache::new(100, alloc.clone(), RandomState::new());
+            let mut cache = Cache::new(alloc.clone(), RandomState::new());
+            cache.init(100);
+
             assert_eq!(false, cache.expire());
 
             for i in 0..3 {
