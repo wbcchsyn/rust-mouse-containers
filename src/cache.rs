@@ -361,6 +361,59 @@ where
             build_hasher,
         }
     }
+
+    /// Allocates `chain_len` count of buckets and mutexes, and initializes `self` .
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chain_len` equals to 0, or if `self` has already initialized.
+    pub fn init(&mut self, chain_len: usize) {
+        assert!(0 < chain_len);
+        assert_eq!(0, self.len);
+        debug_assert_eq!(true, self.mutexes.is_null());
+        debug_assert_eq!(true, self.buckets.is_null());
+
+        let mutexes_count = (chain_len + Mutex8::LEN - 1) / Mutex8::LEN;
+        let alloc = self.alloc.lock().unwrap();
+        let alloc = alloc.backend();
+
+        // Allocating 'mutexes' and 'buckets'
+        let (mutexes, buckets) = {
+            let layout0 = Layout::array::<*mut RawEntry<T>>(chain_len).unwrap();
+            let layout1 = Layout::array::<Mutex8>(mutexes_count).unwrap();
+            let (layout, offset) = layout0.extend(layout1).unwrap();
+
+            let ptr = unsafe { alloc.alloc(layout) };
+            if ptr.is_null() {
+                handle_alloc_error(layout);
+            }
+
+            let mutexes = unsafe { ptr.add(offset) as *mut Mutex8 };
+            let buckets = ptr as *mut *mut RawEntry<T>;
+
+            (mutexes, buckets)
+        };
+
+        // Initializing 'mutexes'
+        for i in 0..mutexes_count {
+            unsafe {
+                let ptr = mutexes.add(i);
+                ptr.write(Mutex8::new());
+            }
+        }
+
+        // Initializing 'buckets'
+        for i in 0..chain_len {
+            unsafe {
+                let ptr = buckets.add(i);
+                ptr.write(null_mut());
+            }
+        }
+
+        self.mutexes = mutexes;
+        self.buckets = buckets;
+        self.len = chain_len;
+    }
 }
 
 impl<T, A, S> BucketChain<T, A, S>
