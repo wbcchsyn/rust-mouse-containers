@@ -299,7 +299,11 @@ where
 {
     /// Returns the number of elements that `self` is holding.
     pub fn len(&self) -> usize {
-        self.len_ as usize
+        if self.is_stack() {
+            (self.len_ - isize::MIN) as usize
+        } else {
+            self.len_ as usize
+        }
     }
 
     /// Forces the length of `self` to `new_len` .
