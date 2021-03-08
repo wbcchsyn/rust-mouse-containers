@@ -95,7 +95,7 @@ where
 
         self.clear();
         unsafe {
-            let layout = Layout::array::<T>(self.capacity_).unwrap();
+            let layout = Layout::array::<T>(self.capacity()).unwrap();
             self.alloc_.dealloc(self.ptr as *mut u8, layout);
         }
     }
@@ -378,7 +378,7 @@ where
             }
         } else {
             unsafe {
-                let layout = Layout::array::<T>(self.capacity_).unwrap();
+                let layout = Layout::array::<T>(self.capacity()).unwrap();
                 let new_size = Layout::array::<T>(self.len() + additional).unwrap().size();
                 let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
 
