@@ -346,12 +346,17 @@ where
 
     /// Returns a raw pointer to the buffer.
     pub fn as_ptr(&self) -> *const T {
-        // It seems that 'std::vec::Vec::as_ptr()' returns nonnull pointer.
-        // This method follows the way.
-        if self.buffer.0.is_null() {
-            core::mem::align_of::<T>() as *const T
+        if self.is_stack() {
+            let ptr = &self.buffer as *const (*mut T, usize);
+            ptr as *const T
         } else {
-            self.buffer.0
+            // It seems that 'std::vec::Vec::as_ptr()' returns nonnull pointer.
+            // This method follows the way.
+            if self.buffer.0.is_null() {
+                core::mem::align_of::<T>() as *const T
+            } else {
+                self.buffer.0
+            }
         }
     }
 
