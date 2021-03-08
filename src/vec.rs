@@ -423,6 +423,10 @@ where
 
     /// Shrinks the capacity to the length as much as possible.
     pub fn shrink_to_fit(&mut self) {
+        if self.is_stack() {
+            return;
+        }
+
         if self.len() == self.capacity() {
             return;
         }
