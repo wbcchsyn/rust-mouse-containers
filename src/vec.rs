@@ -80,6 +80,13 @@ where
     alloc_: A,
 }
 
+impl<T, A> Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    const MAX_STACK_CAPACITY: usize = size_of::<(*mut T, usize)>() / size_of::<T>();
+}
+
 unsafe impl<T, A> Send for Vec<T, A> where A: Send + GlobalAlloc {}
 unsafe impl<T, A> Sync for Vec<T, A> where A: Sync + GlobalAlloc {}
 
