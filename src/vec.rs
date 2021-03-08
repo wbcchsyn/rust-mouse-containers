@@ -76,7 +76,7 @@ where
     A: GlobalAlloc,
 {
     buffer: (*mut T, usize), // (ptr, capacity)
-    len_: usize,
+    len_: isize,
     alloc_: A,
 }
 
@@ -299,7 +299,7 @@ where
 {
     /// Returns the number of elements that `self` is holding.
     pub fn len(&self) -> usize {
-        self.len_
+        self.len_ as usize
     }
 
     /// Forces the length of `self` to `new_len` .
@@ -314,7 +314,7 @@ where
     /// - The elements at `old_len..new_len` must be initialized.
     pub unsafe fn set_len(&mut self, new_len: usize) {
         debug_assert!(new_len <= self.capacity());
-        self.len_ = new_len;
+        self.len_ = new_len as isize;
     }
 
     /// Returns the number of elements that `self` can hold without new allocation.
