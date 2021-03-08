@@ -55,7 +55,7 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use core::iter::IntoIterator;
-use core::mem::MaybeUninit;
+use core::mem::{size_of, size_of_val, MaybeUninit};
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::slice::{Iter, IterMut, SliceIndex};
 use std::alloc::handle_alloc_error;
@@ -327,7 +327,11 @@ where
 
     /// Returns the number of elements that `self` can hold without new allocation.
     pub fn capacity(&self) -> usize {
-        self.buffer.1
+        if self.is_stack() {
+            size_of_val(&self.buffer) / size_of::<T>()
+        } else {
+            self.buffer.1
+        }
     }
 
     /// Returns `ture` if `self` holds no element, or `false` .
