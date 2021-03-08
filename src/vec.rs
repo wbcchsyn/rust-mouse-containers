@@ -101,9 +101,7 @@ where
             return;
         }
 
-        if self.buffer.0.is_null() {
-            return;
-        }
+        debug_assert_eq!(false, self.buffer.0.is_null());
 
         unsafe {
             let layout = Layout::array::<T>(self.capacity()).unwrap();
@@ -362,13 +360,7 @@ where
             let ptr = &self.buffer as *const (*mut T, usize);
             ptr as *const T
         } else {
-            // It seems that 'std::vec::Vec::as_ptr()' returns nonnull pointer.
-            // This method follows the way.
-            if self.buffer.0.is_null() {
-                core::mem::align_of::<T>() as *const T
-            } else {
-                self.buffer.0
-            }
+            self.buffer.0
         }
     }
 
@@ -378,13 +370,7 @@ where
             let ptr = &mut self.buffer as *mut (*mut T, usize);
             ptr as *mut T
         } else {
-            // It seems that 'std::vec::Vec::as_mut_ptr()' returns nonnull pointer.
-            // This method follows the way.
-            if self.buffer.0.is_null() {
-                core::mem::align_of::<T>() as *mut T
-            } else {
-                self.buffer.0
-            }
+            self.buffer.0
         }
     }
 
@@ -398,7 +384,7 @@ where
             return;
         }
 
-        let ptr = if self.buffer.0.is_null() || self.is_stack() {
+        let ptr = if self.is_stack() {
             // First allocation
             unsafe {
                 let layout = Layout::array::<T>(self.len() + additional).unwrap();
