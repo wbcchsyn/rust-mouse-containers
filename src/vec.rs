@@ -446,11 +446,13 @@ where
 
         let layout = Layout::array::<T>(self.capacity()).unwrap();
 
-        if self.len() == 0 {
+        if self.len() <= Self::MAX_STACK_CAPACITY {
+            // Disable small optimization.
             unsafe {
-                let old_ptr = self.as_mut_ptr();
-                self.alloc_.dealloc(old_ptr as *mut u8, layout);
-                self.buffer.0 = core::ptr::null_mut();
+                let ptr = self.as_mut_ptr();
+                self.len_ = isize::MIN + self.len() as isize;
+                self.as_mut_ptr().copy_from_nonoverlapping(ptr, self.len());
+                self.alloc_.dealloc(ptr as *mut u8, layout);
             }
         } else {
             unsafe {
@@ -463,10 +465,9 @@ where
                 }
 
                 self.buffer.0 = ptr as *mut T;
+                self.buffer.1 = self.len();
             }
         }
-
-        self.buffer.1 = self.len();
     }
 
     /// Appends `val` to the end of the buffer.
