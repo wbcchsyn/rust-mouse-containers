@@ -96,7 +96,7 @@ where
         self.clear();
         unsafe {
             let layout = Layout::array::<T>(self.capacity()).unwrap();
-            self.alloc_.dealloc(self.ptr as *mut u8, layout);
+            self.alloc_.dealloc(self.as_ptr() as *mut u8, layout);
         }
     }
 }
@@ -380,7 +380,8 @@ where
             unsafe {
                 let layout = Layout::array::<T>(self.capacity()).unwrap();
                 let new_size = Layout::array::<T>(self.len() + additional).unwrap().size();
-                let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
+                let old_ptr = self.as_mut_ptr();
+                let ptr = self.alloc_.realloc(old_ptr as *mut u8, layout, new_size);
 
                 if ptr.is_null() {
                     let layout = Layout::array::<T>(self.len() + additional).unwrap();
@@ -405,13 +406,15 @@ where
 
         if self.len() == 0 {
             unsafe {
-                self.alloc_.dealloc(self.ptr as *mut u8, layout);
+                let old_ptr = self.as_mut_ptr();
+                self.alloc_.dealloc(old_ptr as *mut u8, layout);
                 self.ptr = core::ptr::null_mut();
             }
         } else {
             unsafe {
                 let new_size = core::mem::size_of::<T>() * self.len();
-                let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
+                let old_ptr = self.as_mut_ptr();
+                let ptr = self.alloc_.realloc(old_ptr as *mut u8, layout, new_size);
                 if ptr.is_null() {
                     let layout = Layout::array::<T>(self.len()).unwrap();
                     handle_alloc_error(layout);
@@ -429,7 +432,7 @@ where
         assert!(self.len() < self.capacity());
 
         unsafe {
-            let ptr = self.ptr.add(self.len());
+            let ptr = self.as_mut_ptr().add(self.len());
             ptr.write(val);
         }
 
@@ -448,7 +451,7 @@ where
             unsafe {
                 let mut ret: MaybeUninit<T> = MaybeUninit::uninit();
 
-                let ptr = self.ptr.add(self.len());
+                let ptr = self.as_mut_ptr().add(self.len());
                 ret.as_mut_ptr().copy_from_nonoverlapping(ptr, 1);
 
                 Some(ret.assume_init())
@@ -474,7 +477,7 @@ where
 
         unsafe {
             for i in len..self.len() {
-                let ptr = self.ptr.add(i);
+                let ptr = self.as_mut_ptr().add(i);
                 ptr.drop_in_place();
             }
         }
@@ -495,7 +498,7 @@ where
 
         unsafe {
             for i in 0..other.len() {
-                let ptr = self.ptr.add(self.len() + i);
+                let ptr = self.as_mut_ptr().add(self.len() + i);
                 ptr.write(other[i].clone());
             }
         }
