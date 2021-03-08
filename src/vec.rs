@@ -391,13 +391,19 @@ where
             return;
         }
 
-        let ptr = if self.buffer.0.is_null() {
+        let ptr = if self.buffer.0.is_null() || self.is_stack() {
+            // First allocation
             unsafe {
-                let layout = Layout::array::<T>(additional).unwrap();
-                let ptr = self.alloc_.alloc(layout);
+                let layout = Layout::array::<T>(self.len() + additional).unwrap();
+                let ptr = self.alloc_.alloc(layout) as *mut T;
                 if ptr.is_null() {
                     handle_alloc_error(layout);
                 }
+
+                // Copy holding elements.
+                ptr.copy_from_nonoverlapping(self.as_ptr(), self.len());
+                // Disable small optimization.
+                self.len_ = self.len() as isize;
 
                 ptr
             }
@@ -413,11 +419,11 @@ where
                     handle_alloc_error(layout);
                 }
 
-                ptr
+                ptr as *mut T
             }
         };
 
-        self.buffer.0 = ptr as *mut T;
+        self.buffer.0 = ptr;
         self.buffer.1 = self.len() + additional;
     }
 
