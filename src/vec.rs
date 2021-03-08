@@ -75,9 +75,8 @@ pub struct Vec<T, A>
 where
     A: GlobalAlloc,
 {
-    ptr: *mut T,
+    buffer: (*mut T, usize), // (ptr, capacity)
     len_: usize,
-    capacity_: usize,
     alloc_: A,
 }
 
@@ -89,7 +88,7 @@ where
     A: GlobalAlloc,
 {
     fn drop(&mut self) {
-        if self.ptr.is_null() {
+        if self.buffer.0.is_null() {
             return;
         }
 
@@ -116,9 +115,8 @@ where
 {
     fn from(alloc: A) -> Self {
         Self {
-            ptr: core::ptr::null_mut(),
             len_: 0,
-            capacity_: 0,
+            buffer: (core::ptr::null_mut(), 0),
             alloc_: alloc,
         }
     }
@@ -321,7 +319,7 @@ where
 
     /// Returns the number of elements that `self` can hold without new allocation.
     pub fn capacity(&self) -> usize {
-        self.capacity_
+        self.buffer.1
     }
 
     /// Returns `ture` if `self` holds no element, or `false` .
@@ -338,10 +336,10 @@ where
     pub fn as_ptr(&self) -> *const T {
         // It seems that 'std::vec::Vec::as_ptr()' returns nonnull pointer.
         // This method follows the way.
-        if self.ptr.is_null() {
+        if self.buffer.0.is_null() {
             core::mem::align_of::<T>() as *const T
         } else {
-            self.ptr
+            self.buffer.0
         }
     }
 
@@ -349,10 +347,10 @@ where
     pub fn as_mut_ptr(&mut self) -> *mut T {
         // It seems that 'std::vec::Vec::as_mut_ptr()' returns nonnull pointer.
         // This method follows the way.
-        if self.ptr.is_null() {
+        if self.buffer.0.is_null() {
             core::mem::align_of::<T>() as *mut T
         } else {
-            self.ptr
+            self.buffer.0
         }
     }
 
@@ -366,7 +364,7 @@ where
             return;
         }
 
-        let ptr = if self.ptr.is_null() {
+        let ptr = if self.buffer.0.is_null() {
             unsafe {
                 let layout = Layout::array::<T>(additional).unwrap();
                 let ptr = self.alloc_.alloc(layout);
@@ -392,8 +390,8 @@ where
             }
         };
 
-        self.ptr = ptr as *mut T;
-        self.capacity_ = self.len() + additional;
+        self.buffer.0 = ptr as *mut T;
+        self.buffer.1 = self.len() + additional;
     }
 
     /// Shrinks the capacity to the length as much as possible.
@@ -408,7 +406,7 @@ where
             unsafe {
                 let old_ptr = self.as_mut_ptr();
                 self.alloc_.dealloc(old_ptr as *mut u8, layout);
-                self.ptr = core::ptr::null_mut();
+                self.buffer.0 = core::ptr::null_mut();
             }
         } else {
             unsafe {
@@ -420,11 +418,11 @@ where
                     handle_alloc_error(layout);
                 }
 
-                self.ptr = ptr as *mut T;
+                self.buffer.0 = ptr as *mut T;
             }
         }
 
-        self.capacity_ = self.len();
+        self.buffer.1 = self.len();
     }
 
     /// Appends `val` to the end of the buffer.
