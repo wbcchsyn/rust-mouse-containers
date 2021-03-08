@@ -88,11 +88,16 @@ where
     A: GlobalAlloc,
 {
     fn drop(&mut self) {
+        self.clear();
+
+        if self.is_stack() {
+            return;
+        }
+
         if self.buffer.0.is_null() {
             return;
         }
 
-        self.clear();
         unsafe {
             let layout = Layout::array::<T>(self.capacity()).unwrap();
             self.alloc_.dealloc(self.as_ptr() as *mut u8, layout);
