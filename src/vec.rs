@@ -304,6 +304,21 @@ where
         self.len_
     }
 
+    /// Forces the length of `self` to `new_len` .
+    ///
+    /// This is a low-level operation that maintains none of the normal invariants of the type.
+    /// Normally changing the length of a vector is done using one of the safe operations instead,
+    /// such as truncate, or clear.
+    ///
+    /// # Safety
+    ///
+    /// - `new_len` must equal to or be less than the `capacity` .
+    /// - The elements at `old_len..new_len` must be initialized.
+    pub unsafe fn set_len(&mut self, new_len: usize) {
+        debug_assert!(new_len <= self.capacity());
+        self.len_ = new_len;
+    }
+
     /// Returns the number of elements that `self` can hold without new allocation.
     pub fn capacity(&self) -> usize {
         self.capacity_
