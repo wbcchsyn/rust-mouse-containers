@@ -318,7 +318,11 @@ where
     /// - The elements at `old_len..new_len` must be initialized.
     pub unsafe fn set_len(&mut self, new_len: usize) {
         debug_assert!(new_len <= self.capacity());
-        self.len_ = new_len as isize;
+        if self.is_stack() {
+            self.len_ = isize::MIN + new_len as isize;
+        } else {
+            self.len_ = new_len as isize;
+        }
     }
 
     /// Returns the number of elements that `self` can hold without new allocation.
