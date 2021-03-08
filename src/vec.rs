@@ -362,12 +362,17 @@ where
 
     /// Returns a raw pointer to the buffer.
     pub fn as_mut_ptr(&mut self) -> *mut T {
-        // It seems that 'std::vec::Vec::as_mut_ptr()' returns nonnull pointer.
-        // This method follows the way.
-        if self.buffer.0.is_null() {
-            core::mem::align_of::<T>() as *mut T
+        if self.is_stack() {
+            let ptr = &mut self.buffer as *mut (*mut T, usize);
+            ptr as *mut T
         } else {
-            self.buffer.0
+            // It seems that 'std::vec::Vec::as_mut_ptr()' returns nonnull pointer.
+            // This method follows the way.
+            if self.buffer.0.is_null() {
+                core::mem::align_of::<T>() as *mut T
+            } else {
+                self.buffer.0
+            }
         }
     }
 
