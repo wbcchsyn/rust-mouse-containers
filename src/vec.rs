@@ -326,7 +326,7 @@ where
 
     /// Returns `ture` if `self` holds no element, or `false` .
     pub fn is_empty(&self) -> bool {
-        self.len_ == 0
+        self.len() == 0
     }
 
     /// Returns a reference to `alloc` .
@@ -397,23 +397,23 @@ where
 
     /// Shrinks the capacity to the length as much as possible.
     pub fn shrink_to_fit(&mut self) {
-        if self.len_ == self.capacity_ {
+        if self.len() == self.capacity() {
             return;
         }
 
-        let layout = Layout::array::<T>(self.capacity_).unwrap();
+        let layout = Layout::array::<T>(self.capacity()).unwrap();
 
-        if self.len_ == 0 {
+        if self.len() == 0 {
             unsafe {
                 self.alloc_.dealloc(self.ptr as *mut u8, layout);
                 self.ptr = core::ptr::null_mut();
             }
         } else {
             unsafe {
-                let new_size = core::mem::size_of::<T>() * self.len_;
+                let new_size = core::mem::size_of::<T>() * self.len();
                 let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
                 if ptr.is_null() {
-                    let layout = Layout::array::<T>(self.len_).unwrap();
+                    let layout = Layout::array::<T>(self.len()).unwrap();
                     handle_alloc_error(layout);
                 }
 
@@ -421,32 +421,34 @@ where
             }
         }
 
-        self.capacity_ = self.len_;
+        self.capacity_ = self.len();
     }
 
     /// Appends `val` to the end of the buffer.
     pub fn push(&mut self, val: T) {
-        assert!(self.len_ < self.capacity_);
+        assert!(self.len() < self.capacity());
 
         unsafe {
-            let ptr = self.ptr.add(self.len_);
+            let ptr = self.ptr.add(self.len());
             ptr.write(val);
         }
 
-        self.len_ += 1;
+        let old_len = self.len();
+        unsafe { self.set_len(old_len + 1) };
     }
 
     /// Removes the last element from `self` and returns it if any, or `None` .
     pub fn pop(&mut self) -> Option<T> {
-        if self.len_ == 0 {
+        if self.len() == 0 {
             None
         } else {
-            self.len_ -= 1;
+            let old_len = self.len();
+            unsafe { self.set_len(old_len - 1) };
 
             unsafe {
                 let mut ret: MaybeUninit<T> = MaybeUninit::uninit();
 
-                let ptr = self.ptr.add(self.len_);
+                let ptr = self.ptr.add(self.len());
                 ret.as_mut_ptr().copy_from_nonoverlapping(ptr, 1);
 
                 Some(ret.assume_init())
@@ -466,18 +468,18 @@ where
     ///
     /// Note that this method has no effect on the allocated capacity.
     pub fn truncate(&mut self, len: usize) {
-        if self.len_ <= len {
+        if self.len() <= len {
             return;
         }
 
         unsafe {
-            for i in len..self.len_ {
+            for i in len..self.len() {
                 let ptr = self.ptr.add(i);
                 ptr.drop_in_place();
             }
         }
 
-        self.len_ = len;
+        unsafe { self.set_len(len) };
     }
 
     /// Clones and appends all the elements in `other` to the end of `self` .
@@ -489,16 +491,17 @@ where
     where
         T: Clone,
     {
-        assert!(self.len_ + other.len() <= self.capacity_);
+        assert!(self.len() + other.len() <= self.capacity());
 
         unsafe {
             for i in 0..other.len() {
-                let ptr = self.ptr.add(self.len_ + i);
+                let ptr = self.ptr.add(self.len() + i);
                 ptr.write(other[i].clone());
             }
         }
 
-        self.len_ += other.len();
+        let old_len = self.len();
+        unsafe { self.set_len(old_len + other.len()) };
     }
 }
 
