@@ -504,6 +504,10 @@ where
         let old_len = self.len();
         unsafe { self.set_len(old_len + other.len()) };
     }
+
+    fn is_stack(&self) -> bool {
+        self.len_ < 0
+    }
 }
 
 #[cfg(test)]
