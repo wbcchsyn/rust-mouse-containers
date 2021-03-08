@@ -127,7 +127,7 @@ where
 {
     fn from(alloc: A) -> Self {
         Self {
-            len_: 0,
+            len_: isize::MIN,
             buffer: (core::ptr::null_mut(), 0),
             alloc_: alloc,
         }
@@ -563,7 +563,7 @@ mod tests {
     fn from() {
         let v: Vec<u8, GAlloc> = Vec::from(GAlloc::default());
         assert_eq!(0, v.len());
-        assert_eq!(0, v.capacity());
+        assert_eq!(Vec::<u8, GAlloc>::MAX_STACK_CAPACITY, v.capacity());
     }
 
     #[test]
@@ -673,17 +673,19 @@ mod tests {
         let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
-            v.reserve(10);
+            v.reserve(i);
 
             for j in 0..i {
                 v.push(GBox::new(j, alloc.clone()));
             }
             v.shrink_to_fit();
-            assert_eq!(v.len(), v.capacity());
+            let expected = usize::max(v.len(), Vec::<GBox<usize>, GAlloc>::MAX_STACK_CAPACITY);
+            assert_eq!(expected, v.capacity());
 
             v.clear();
             v.shrink_to_fit();
-            assert_eq!(v.len(), v.capacity());
+            let expected = Vec::<GBox<usize>, GAlloc>::MAX_STACK_CAPACITY;
+            assert_eq!(expected, v.capacity());
         }
     }
 
