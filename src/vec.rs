@@ -569,10 +569,10 @@ mod tests {
     #[test]
     fn push() {
         let alloc = GAlloc::default();
-        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
-            assert_eq!(10, v.capacity());
+            v.reserve(1);
             assert_eq!(i, v.len());
             v.push(GBox::new(i, alloc.clone()));
         }
@@ -591,16 +591,20 @@ mod tests {
     #[test]
     fn clear() {
         let alloc = GAlloc::default();
-        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
+            v.reserve(i);
+
             for j in 0..i {
                 v.push(GBox::new(j, alloc.clone()));
             }
 
             v.clear();
-            assert_eq!(10, v.capacity());
             assert_eq!(0, v.len());
+
+            let capacity = usize::max(i, Vec::<GBox<usize>, GAlloc>::MAX_STACK_CAPACITY);
+            assert_eq!(capacity, v.capacity());
         }
     }
 
