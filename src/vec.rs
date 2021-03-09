@@ -55,7 +55,7 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use core::iter::IntoIterator;
-use core::mem::MaybeUninit;
+use core::mem::{size_of, MaybeUninit};
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use core::slice::{Iter, IterMut, SliceIndex};
 use std::alloc::handle_alloc_error;
@@ -75,10 +75,16 @@ pub struct Vec<T, A>
 where
     A: GlobalAlloc,
 {
-    ptr: *mut T,
-    len_: usize,
-    capacity_: usize,
+    buffer: (*mut T, usize), // (ptr, capacity)
+    len_: isize,
     alloc_: A,
+}
+
+impl<T, A> Vec<T, A>
+where
+    A: GlobalAlloc,
+{
+    const MAX_STACK_CAPACITY: usize = size_of::<(*mut T, usize)>() / size_of::<T>();
 }
 
 unsafe impl<T, A> Send for Vec<T, A> where A: Send + GlobalAlloc {}
@@ -89,14 +95,17 @@ where
     A: GlobalAlloc,
 {
     fn drop(&mut self) {
-        if self.ptr.is_null() {
+        self.clear();
+
+        if self.is_stack() {
             return;
         }
 
-        self.clear();
+        debug_assert_eq!(false, self.buffer.0.is_null());
+
         unsafe {
-            let layout = Layout::array::<T>(self.capacity_).unwrap();
-            self.alloc_.dealloc(self.ptr as *mut u8, layout);
+            let layout = Layout::array::<T>(self.capacity()).unwrap();
+            self.alloc_.dealloc(self.as_ptr() as *mut u8, layout);
         }
     }
 }
@@ -116,9 +125,8 @@ where
 {
     fn from(alloc: A) -> Self {
         Self {
-            ptr: core::ptr::null_mut(),
-            len_: 0,
-            capacity_: 0,
+            len_: isize::MIN,
+            buffer: (core::ptr::null_mut(), 0),
             alloc_: alloc,
         }
     }
@@ -301,17 +309,44 @@ where
 {
     /// Returns the number of elements that `self` is holding.
     pub fn len(&self) -> usize {
-        self.len_
+        if self.is_stack() {
+            (self.len_ - isize::MIN) as usize
+        } else {
+            self.len_ as usize
+        }
+    }
+
+    /// Forces the length of `self` to `new_len` .
+    ///
+    /// This is a low-level operation that maintains none of the normal invariants of the type.
+    /// Normally changing the length of a vector is done using one of the safe operations instead,
+    /// such as truncate, or clear.
+    ///
+    /// # Safety
+    ///
+    /// - `new_len` must equal to or be less than the `capacity` .
+    /// - The elements at `old_len..new_len` must be initialized.
+    pub unsafe fn set_len(&mut self, new_len: usize) {
+        debug_assert!(new_len <= self.capacity());
+        if self.is_stack() {
+            self.len_ = isize::MIN + new_len as isize;
+        } else {
+            self.len_ = new_len as isize;
+        }
     }
 
     /// Returns the number of elements that `self` can hold without new allocation.
     pub fn capacity(&self) -> usize {
-        self.capacity_
+        if self.is_stack() {
+            Self::MAX_STACK_CAPACITY
+        } else {
+            self.buffer.1
+        }
     }
 
     /// Returns `ture` if `self` holds no element, or `false` .
     pub fn is_empty(&self) -> bool {
-        self.len_ == 0
+        self.len() == 0
     }
 
     /// Returns a reference to `alloc` .
@@ -321,23 +356,21 @@ where
 
     /// Returns a raw pointer to the buffer.
     pub fn as_ptr(&self) -> *const T {
-        // It seems that 'std::vec::Vec::as_ptr()' returns nonnull pointer.
-        // This method follows the way.
-        if self.ptr.is_null() {
-            core::mem::align_of::<T>() as *const T
+        if self.is_stack() {
+            let ptr = &self.buffer as *const (*mut T, usize);
+            ptr as *const T
         } else {
-            self.ptr
+            self.buffer.0
         }
     }
 
     /// Returns a raw pointer to the buffer.
     pub fn as_mut_ptr(&mut self) -> *mut T {
-        // It seems that 'std::vec::Vec::as_mut_ptr()' returns nonnull pointer.
-        // This method follows the way.
-        if self.ptr.is_null() {
-            core::mem::align_of::<T>() as *mut T
+        if self.is_stack() {
+            let ptr = &mut self.buffer as *mut (*mut T, usize);
+            ptr as *mut T
         } else {
-            self.ptr
+            self.buffer.0
         }
     }
 
@@ -351,87 +384,103 @@ where
             return;
         }
 
-        let ptr = if self.ptr.is_null() {
+        let ptr = if self.is_stack() {
+            // First allocation
             unsafe {
-                let layout = Layout::array::<T>(additional).unwrap();
-                let ptr = self.alloc_.alloc(layout);
+                let layout = Layout::array::<T>(self.len() + additional).unwrap();
+                let ptr = self.alloc_.alloc(layout) as *mut T;
                 if ptr.is_null() {
                     handle_alloc_error(layout);
                 }
+
+                // Copy holding elements.
+                ptr.copy_from_nonoverlapping(self.as_ptr(), self.len());
+                // Disable small optimization.
+                self.len_ = self.len() as isize;
 
                 ptr
             }
         } else {
             unsafe {
-                let layout = Layout::array::<T>(self.capacity_).unwrap();
+                let layout = Layout::array::<T>(self.capacity()).unwrap();
                 let new_size = Layout::array::<T>(self.len() + additional).unwrap().size();
-                let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
+                let old_ptr = self.as_mut_ptr();
+                let ptr = self.alloc_.realloc(old_ptr as *mut u8, layout, new_size);
 
                 if ptr.is_null() {
                     let layout = Layout::array::<T>(self.len() + additional).unwrap();
                     handle_alloc_error(layout);
                 }
 
-                ptr
+                ptr as *mut T
             }
         };
 
-        self.ptr = ptr as *mut T;
-        self.capacity_ = self.len() + additional;
+        self.buffer.0 = ptr;
+        self.buffer.1 = self.len() + additional;
     }
 
     /// Shrinks the capacity to the length as much as possible.
     pub fn shrink_to_fit(&mut self) {
-        if self.len_ == self.capacity_ {
+        if self.is_stack() {
             return;
         }
 
-        let layout = Layout::array::<T>(self.capacity_).unwrap();
+        if self.len() == self.capacity() {
+            return;
+        }
 
-        if self.len_ == 0 {
+        let layout = Layout::array::<T>(self.capacity()).unwrap();
+
+        if self.len() <= Self::MAX_STACK_CAPACITY {
+            // Disable small optimization.
             unsafe {
-                self.alloc_.dealloc(self.ptr as *mut u8, layout);
-                self.ptr = core::ptr::null_mut();
+                let ptr = self.as_mut_ptr();
+                self.len_ = isize::MIN + self.len() as isize;
+                self.as_mut_ptr().copy_from_nonoverlapping(ptr, self.len());
+                self.alloc_.dealloc(ptr as *mut u8, layout);
             }
         } else {
             unsafe {
-                let new_size = core::mem::size_of::<T>() * self.len_;
-                let ptr = self.alloc_.realloc(self.ptr as *mut u8, layout, new_size);
+                let new_size = core::mem::size_of::<T>() * self.len();
+                let old_ptr = self.as_mut_ptr();
+                let ptr = self.alloc_.realloc(old_ptr as *mut u8, layout, new_size);
                 if ptr.is_null() {
-                    let layout = Layout::array::<T>(self.len_).unwrap();
+                    let layout = Layout::array::<T>(self.len()).unwrap();
                     handle_alloc_error(layout);
                 }
 
-                self.ptr = ptr as *mut T;
+                self.buffer.0 = ptr as *mut T;
+                self.buffer.1 = self.len();
             }
         }
-
-        self.capacity_ = self.len_;
     }
 
     /// Appends `val` to the end of the buffer.
     pub fn push(&mut self, val: T) {
-        assert!(self.len_ < self.capacity_);
+        assert!(self.len() < self.capacity());
 
         unsafe {
-            let ptr = self.ptr.add(self.len_);
+            let ptr = self.as_mut_ptr().add(self.len());
             ptr.write(val);
         }
 
-        self.len_ += 1;
+        let old_len = self.len();
+        unsafe { self.set_len(old_len + 1) };
     }
 
     /// Removes the last element from `self` and returns it if any, or `None` .
     pub fn pop(&mut self) -> Option<T> {
-        if self.len_ == 0 {
+        if self.len() == 0 {
             None
         } else {
-            self.len_ -= 1;
+            let old_len = self.len();
+            unsafe { self.set_len(old_len - 1) };
 
             unsafe {
                 let mut ret: MaybeUninit<T> = MaybeUninit::uninit();
 
-                let ptr = self.ptr.add(self.len_);
+                let ptr = self.as_mut_ptr().add(self.len());
                 ret.as_mut_ptr().copy_from_nonoverlapping(ptr, 1);
 
                 Some(ret.assume_init())
@@ -451,18 +500,18 @@ where
     ///
     /// Note that this method has no effect on the allocated capacity.
     pub fn truncate(&mut self, len: usize) {
-        if self.len_ <= len {
+        if self.len() <= len {
             return;
         }
 
         unsafe {
-            for i in len..self.len_ {
-                let ptr = self.ptr.add(i);
+            for i in len..self.len() {
+                let ptr = self.as_mut_ptr().add(i);
                 ptr.drop_in_place();
             }
         }
 
-        self.len_ = len;
+        unsafe { self.set_len(len) };
     }
 
     /// Clones and appends all the elements in `other` to the end of `self` .
@@ -474,16 +523,21 @@ where
     where
         T: Clone,
     {
-        assert!(self.len_ + other.len() <= self.capacity_);
+        assert!(self.len() + other.len() <= self.capacity());
 
         unsafe {
             for i in 0..other.len() {
-                let ptr = self.ptr.add(self.len_ + i);
+                let ptr = self.as_mut_ptr().add(self.len() + i);
                 ptr.write(other[i].clone());
             }
         }
 
-        self.len_ += other.len();
+        let old_len = self.len();
+        unsafe { self.set_len(old_len + other.len()) };
+    }
+
+    fn is_stack(&self) -> bool {
+        self.len_ < 0
     }
 }
 
@@ -496,7 +550,7 @@ mod tests {
     fn from() {
         let v: Vec<u8, GAlloc> = Vec::from(GAlloc::default());
         assert_eq!(0, v.len());
-        assert_eq!(0, v.capacity());
+        assert_eq!(Vec::<u8, GAlloc>::MAX_STACK_CAPACITY, v.capacity());
     }
 
     #[test]
@@ -515,10 +569,10 @@ mod tests {
     #[test]
     fn push() {
         let alloc = GAlloc::default();
-        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
-            assert_eq!(10, v.capacity());
+            v.reserve(1);
             assert_eq!(i, v.len());
             v.push(GBox::new(i, alloc.clone()));
         }
@@ -537,16 +591,20 @@ mod tests {
     #[test]
     fn clear() {
         let alloc = GAlloc::default();
-        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, alloc.clone());
+        let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
+            v.reserve(i);
+
             for j in 0..i {
                 v.push(GBox::new(j, alloc.clone()));
             }
 
             v.clear();
-            assert_eq!(10, v.capacity());
             assert_eq!(0, v.len());
+
+            let capacity = usize::max(i, Vec::<GBox<usize>, GAlloc>::MAX_STACK_CAPACITY);
+            assert_eq!(capacity, v.capacity());
         }
     }
 
@@ -606,17 +664,19 @@ mod tests {
         let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
-            v.reserve(10);
+            v.reserve(i);
 
             for j in 0..i {
                 v.push(GBox::new(j, alloc.clone()));
             }
             v.shrink_to_fit();
-            assert_eq!(v.len(), v.capacity());
+            let expected = usize::max(v.len(), Vec::<GBox<usize>, GAlloc>::MAX_STACK_CAPACITY);
+            assert_eq!(expected, v.capacity());
 
             v.clear();
             v.shrink_to_fit();
-            assert_eq!(v.len(), v.capacity());
+            let expected = Vec::<GBox<usize>, GAlloc>::MAX_STACK_CAPACITY;
+            assert_eq!(expected, v.capacity());
         }
     }
 
