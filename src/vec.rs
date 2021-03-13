@@ -155,6 +155,17 @@ where
         ret.reserve(capacity);
         ret
     }
+
+    /// Creates a new instance, cloning `vals` .
+    pub fn from_slice(vals: &[T], alloc: A) -> Self
+    where
+        T: Clone,
+    {
+        let mut ret = Self::from(alloc);
+        ret.reserve(vals.len());
+        ret.extend_from_slice(vals);
+        ret
+    }
 }
 
 impl<T, A> PartialEq<Self> for Vec<T, A>
