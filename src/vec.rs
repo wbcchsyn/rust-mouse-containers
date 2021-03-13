@@ -110,6 +110,19 @@ where
     }
 }
 
+impl<T, A> Clone for Vec<T, A>
+where
+    T: Clone,
+    A: Clone + GlobalAlloc,
+{
+    fn clone(&self) -> Self {
+        let mut ret = Self::from(self.alloc_.clone());
+        ret.reserve(self.len());
+        ret.extend_from_slice(self.as_ref() as &[T]);
+        ret
+    }
+}
+
 impl<T, A> Default for Vec<T, A>
 where
     A: Default + GlobalAlloc,
@@ -140,6 +153,17 @@ where
     pub fn with_capacity(capacity: usize, alloc: A) -> Self {
         let mut ret = Self::from(alloc);
         ret.reserve(capacity);
+        ret
+    }
+
+    /// Creates a new instance, cloning `vals` .
+    pub fn from_slice(vals: &[T], alloc: A) -> Self
+    where
+        T: Clone,
+    {
+        let mut ret = Self::from(alloc);
+        ret.reserve(vals.len());
+        ret.extend_from_slice(vals);
         ret
     }
 }
