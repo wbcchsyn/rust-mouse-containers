@@ -64,12 +64,7 @@ use std::borrow::{Borrow, BorrowMut};
 /// `Vec` behaves like 'std::vec::Vec' except for the followings.
 ///
 /// - `Vec` takes allocator as the parameter.
-/// - `Vec` causes a panic if the size will exceed the capacity because it costs O(n) CPU time.
-///   Method [`push`] for example, causes a panic if `len` equals to `capacity` .
-///   User must call `reserve` in advance if necessary.
 /// - `Vec` does not implement some methods that costs O(n) CPU time or more on purpose.
-///
-/// [`push`]: #method.push
 #[derive(Debug)]
 pub struct Vec<T, A>
 where
@@ -481,9 +476,16 @@ where
     }
 
     /// Appends `val` to the end of the buffer.
+    ///
+    /// # Warnings
+    ///
+    /// This method calls `self.reserve(1)` everytime.
+    /// It makes the performance better to call [`reserve`] in advance if calling this method
+    /// 2 or more than 2 times.
+    ///
+    /// [`reserve`]: #method.reserve
     pub fn push(&mut self, val: T) {
-        assert!(self.len() < self.capacity());
-
+        self.reserve(1);
         unsafe {
             let ptr = self.as_mut_ptr().add(self.len());
             ptr.write(val);
@@ -596,19 +598,8 @@ mod tests {
         let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
-            v.reserve(1);
             assert_eq!(i, v.len());
             v.push(GBox::new(i, alloc.clone()));
-        }
-    }
-
-    #[test]
-    #[should_panic]
-    fn push_panic() {
-        let mut v: Vec<GBox<usize>, GAlloc> = Vec::with_capacity(10, GAlloc::default());
-
-        for i in 0..=10 {
-            v.push(GBox::from(i));
         }
     }
 
@@ -618,8 +609,6 @@ mod tests {
         let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
-            v.reserve(i);
-
             for j in 0..i {
                 v.push(GBox::new(j, alloc.clone()));
             }
@@ -688,8 +677,6 @@ mod tests {
         let mut v: Vec<GBox<usize>, GAlloc> = Vec::from(alloc.clone());
 
         for i in 0..10 {
-            v.reserve(i);
-
             for j in 0..i {
                 v.push(GBox::new(j, alloc.clone()));
             }
