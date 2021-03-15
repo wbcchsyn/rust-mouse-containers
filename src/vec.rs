@@ -112,7 +112,6 @@ where
 {
     fn clone(&self) -> Self {
         let mut ret = Self::from(self.alloc_.clone());
-        ret.reserve(self.len());
         ret.extend_from_slice(self.as_ref() as &[T]);
         ret
     }
@@ -157,7 +156,6 @@ where
         T: Clone,
     {
         let mut ret = Self::from(alloc);
-        ret.reserve(vals.len());
         ret.extend_from_slice(vals);
         ret
     }
@@ -542,14 +540,18 @@ where
 
     /// Clones and appends all the elements in `other` to the end of `self` .
     ///
-    /// # Panics
+    /// # Warnings
     ///
-    /// Panic if `self.len() + other.len()` is greater than the current capacity.
+    /// This method calls `self.reserve(other.len())` everytime.
+    /// It makes the performance better to call [`reserve`] in advance when calling this method 2
+    /// or more than 2 times.
+    ///
+    /// [`reserve`]: #method.reserve
     pub fn extend_from_slice(&mut self, other: &[T])
     where
         T: Clone,
     {
-        assert!(self.len() + other.len() <= self.capacity());
+        self.reserve(other.len());
 
         unsafe {
             for i in 0..other.len() {
