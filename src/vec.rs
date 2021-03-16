@@ -564,6 +564,23 @@ where
         unsafe { self.set_len(old_len + other.len()) };
     }
 
+    /// Consumes `vec` and `alloc` , and returns a new instance.
+    ///
+    /// # Safety
+    ///
+    /// The heap memory that `vec` allocated will be released using `alloc` .
+    pub unsafe fn from_vec_alloc(mut vec: std::vec::Vec<T>, alloc: A) -> Self {
+        let len_ = vec.len() as isize;
+        let ptr = vec.as_mut_ptr();
+        let capacity = vec.capacity();
+        std::mem::forget(vec);
+        Self {
+            len_,
+            buffer: (ptr, capacity),
+            alloc_: alloc,
+        }
+    }
+
     fn is_stack(&self) -> bool {
         self.len_ < 0
     }
