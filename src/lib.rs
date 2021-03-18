@@ -58,4 +58,5 @@
 pub mod lru_hash_set;
 mod vec;
 
+pub use lru_hash_set::LruHashSet;
 pub use vec::Vec;
