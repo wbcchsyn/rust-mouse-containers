@@ -152,15 +152,14 @@ impl<T> RawEntry<T> {
 
 impl<T: ?Sized> RawEntry<T> {
     /// Find the entry that equals to `key` , and returns the pointer if any.
-    pub fn get<K>(bucket: *mut Self, key: &K) -> Option<*mut Self>
+    pub fn get<K, F>(bucket: *mut Self, key: &K, eq: F) -> Option<*mut Self>
     where
-        T: Borrow<K>,
-        K: Eq,
+        F: Fn(&K, &T) -> bool,
     {
         let mut cur = bucket;
         while !cur.is_null() {
             let entry = unsafe { &mut *cur };
-            if entry.val.borrow() == key {
+            if eq(key, &entry.val) {
                 return Some(cur);
             }
             cur = entry.tail;
@@ -173,10 +172,20 @@ impl<T: ?Sized> RawEntry<T> {
 #[cfg(test)]
 mod raw_entry_tests {
     use super::*;
+    use std::borrow::Borrow;
+
+    fn eq<K, T>(key: &K, val: &T) -> bool
+    where
+        K: Eq,
+        T: Borrow<K>,
+    {
+        let val = val.borrow();
+        key == val
+    }
 
     #[test]
     fn get() {
-        let r = RawEntry::<i32>::get(null_mut(), &1);
+        let r = RawEntry::<i32>::get(null_mut(), &1, eq);
         assert!(true, r.is_none());
 
         let mut v = Vec::with_capacity(10);
@@ -190,9 +199,9 @@ mod raw_entry_tests {
             for j in 0..10 {
                 let bucket = &mut v[i];
                 if i < j {
-                    assert_eq!(true, RawEntry::get(bucket, &j).is_none());
+                    assert_eq!(true, RawEntry::get(bucket, &j, eq).is_none());
                 } else {
-                    let ptr = RawEntry::get(bucket, &j).unwrap();
+                    let ptr = RawEntry::get(bucket, &j, eq).unwrap();
                     assert_eq!(j, unsafe { (&*ptr).val });
                 }
             }
@@ -213,40 +222,40 @@ mod raw_entry_tests {
         // [0, 1, 2, 3, 4] -> [1, 2, 3, 4]
         bucket = unsafe { RawEntry::remove(bucket, &mut v[0]) };
         for i in &[0] {
-            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+            assert_eq!(true, RawEntry::get(bucket, i, eq).is_none());
         }
         for i in &[1, 2, 3, 4] {
-            let ptr = RawEntry::get(bucket, i).unwrap();
+            let ptr = RawEntry::get(bucket, i, eq).unwrap();
             assert_eq!(*i, unsafe { (&*ptr).val });
         }
 
         // [1, 2, 3, 4] -> [1, 2, 3]
         bucket = unsafe { RawEntry::remove(bucket, &mut v[4]) };
         for i in &[0, 4] {
-            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+            assert_eq!(true, RawEntry::get(bucket, i, eq).is_none());
         }
         for i in &[1, 2, 3] {
-            let ptr = RawEntry::get(bucket, i).unwrap();
+            let ptr = RawEntry::get(bucket, i, eq).unwrap();
             assert_eq!(*i, unsafe { (&*ptr).val });
         }
 
         // [1, 2, 3] -> [1, 3]
         bucket = unsafe { RawEntry::remove(bucket, &mut v[2]) };
         for i in &[0, 2, 4] {
-            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+            assert_eq!(true, RawEntry::get(bucket, i, eq).is_none());
         }
         for i in &[1, 3] {
-            let ptr = RawEntry::get(bucket, i).unwrap();
+            let ptr = RawEntry::get(bucket, i, eq).unwrap();
             assert_eq!(*i, unsafe { (&*ptr).val });
         }
 
         // [1, 3] -> [3]
         bucket = unsafe { RawEntry::remove(bucket, &mut v[1]) };
         for i in &[0, 1, 2, 4] {
-            assert_eq!(true, RawEntry::get(bucket, i).is_none());
+            assert_eq!(true, RawEntry::get(bucket, i, eq).is_none());
         }
         for i in &[3] {
-            let ptr = RawEntry::get(bucket, i).unwrap();
+            let ptr = RawEntry::get(bucket, i, eq).unwrap();
             assert_eq!(*i, unsafe { (&*ptr).val });
         }
 
@@ -408,8 +417,8 @@ where
         F: FnOnce(&mut T, T) -> R,
     {
         let (guard, bucket) = self.get_bucket(&val);
-
-        match RawEntry::get(*bucket, &val) {
+        let eq = |new_val: &T, entry_val: &T| -> bool { new_val == entry_val };
+        match RawEntry::get(*bucket, &val, eq) {
             None => {
                 // Inserting 'val'
                 let layout = Layout::new::<RawEntry<T>>();
@@ -445,7 +454,11 @@ where
         K: Eq + Hash,
     {
         let (guard, bucket) = self.get_bucket(&key);
-        RawEntry::get(*bucket, &key).map(|ptr| (guard, &mut *ptr))
+        let eq = |k: &K, v: &T| -> bool {
+            let v: &K = v.borrow();
+            k == v
+        };
+        RawEntry::get(*bucket, key, eq).map(|ptr| (guard, &mut *ptr))
     }
 
     /// Removes `entry` from `self` .
