@@ -90,6 +90,15 @@ impl<T> Deref for Entry<'_, T> {
     }
 }
 
+impl<T> Entry<'_, T> {
+    /// Makes `self` as the 'Most Recently Used (MRU)' element of the [`LruHashSet`] .
+    ///
+    /// [`LruHashSet`]: struct.LruHashSet.html
+    pub fn to_mru(&self) {
+        self.0.to_mru()
+    }
+}
+
 /// `LruHashSet` is a thread-safe LRU hash set.
 pub struct LruHashSet<T, A, S>
 where
