@@ -64,7 +64,7 @@ use std::alloc::handle_alloc_error;
 use std::borrow::Borrow;
 
 pub use crate::raw_lru_hash_set::Entry;
-use crate::raw_lru_hash_set::LruHashSet as RawLruHashSet;
+use crate::raw_lru_hash_set::RawLruHashSet;
 
 /// `LruHashSet` is a thread-safe LRU hash set.
 pub struct LruHashSet<T, A, S>

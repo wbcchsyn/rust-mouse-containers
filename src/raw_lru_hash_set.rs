@@ -51,7 +51,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-//! Module `lru_hash_set` provides struct `LruHashSet` and the related things.
+//! Module `lru_hash_set` provides struct `RawLruHashSet` and the related things.
 
 use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
@@ -85,11 +85,11 @@ impl OrderLinks {
     }
 }
 
-/// `RawEntry` is an entry of [`LruHashSet`]
+/// `RawEntry` is an entry of [`RawLruHashSet`]
 ///
 /// It forms a forward linked list by itself.
 ///
-/// [`LruHashSet`]: struct.LruHashSet.html
+/// [`RawLruHashSet`]: struct.RawLruHashSet.html
 #[repr(C)]
 struct RawEntry<T: ?Sized> {
     order: UnsafeCell<OrderLinks>,
@@ -899,7 +899,7 @@ mod order_tests {
     }
 }
 
-/// `Entry` is the entry of [`LruHashSet`] .
+/// `Entry` is the entry of [`RawLruHashSet`] .
 ///
 /// This instance includes an RAII lock guard.
 /// User can sure that no other thread drops nor modifies the element while the instance is.
@@ -909,13 +909,13 @@ mod order_tests {
 /// # Warnings
 ///
 /// Some entries shares the same mutex.
-/// ([`LruHashSet`] adopts chain way to implement hash set, and entries in the same bucket shares
+/// ([`RawLruHashSet`] adopts chain way to implement hash set, and entries in the same bucket shares
 /// the same mutex.)
 ///
-/// It may cause a dead lock to call methods of [`LruHashSet`] while the thread holds an instance
+/// It may cause a dead lock to call methods of [`RawLruHashSet`] while the thread holds an instance
 /// of `Entry` .
 ///
-/// [`LruHashSet`]: struct.LruHashSet.html
+/// [`RawLruHashSet`]: struct.RawLruHashSet.html
 pub struct Entry<'a, T> {
     _guard: Mutex8Guard<'a>,
     raw: &'a mut RawEntry<T>,
@@ -933,7 +933,7 @@ impl<T> Deref for Entry<'_, T> {
 }
 
 impl<T> Entry<'_, T> {
-    /// Makes `self` as the 'Most Recently Used (MRU)' element of the [`LruHashSet`] .
+    /// Makes `self` as the 'Most Recently Used (MRU)' element of the [`RawLruHashSet`] .
     pub fn to_mru(&self) {
         unsafe {
             let link = &mut *self.raw.order.get();
@@ -943,8 +943,8 @@ impl<T> Entry<'_, T> {
     }
 }
 
-/// `LruHashSet` is a thread-safe LRU hash set.
-pub struct LruHashSet<T, A, S>
+/// `RawLruHashSet` is a thread-safe LRU hash set.
+pub struct RawLruHashSet<T, A, S>
 where
     A: GlobalAlloc,
 {
@@ -952,7 +952,7 @@ where
     order: Mutex<Order>,
 }
 
-unsafe impl<T, A, S> Send for LruHashSet<T, A, S>
+unsafe impl<T, A, S> Send for RawLruHashSet<T, A, S>
 where
     T: Send,
     A: Send + GlobalAlloc,
@@ -960,7 +960,7 @@ where
 {
 }
 
-unsafe impl<T, A, S> Sync for LruHashSet<T, A, S>
+unsafe impl<T, A, S> Sync for RawLruHashSet<T, A, S>
 where
     T: Send,
     A: Send + GlobalAlloc,
@@ -968,7 +968,7 @@ where
 {
 }
 
-impl<T, A, S> LruHashSet<T, A, S>
+impl<T, A, S> RawLruHashSet<T, A, S>
 where
     A: GlobalAlloc,
 {
@@ -994,7 +994,7 @@ where
     }
 }
 
-impl<T, A, S> LruHashSet<T, A, S>
+impl<T, A, S> RawLruHashSet<T, A, S>
 where
     A: GlobalAlloc,
     S: BuildHasher,
@@ -1107,7 +1107,7 @@ mod lru_hash_set_tests {
     use std::borrow::Borrow;
     use std::collections::hash_map::RandomState;
 
-    type LruHashSet = super::LruHashSet<GBox<usize>, GAlloc, RandomState>;
+    type RawLruHashSet = super::RawLruHashSet<GBox<usize>, GAlloc, RandomState>;
 
     fn op(a: &mut GBox<usize>, b: GBox<usize>) -> usize {
         assert_eq!(**a, *b);
@@ -1125,19 +1125,19 @@ mod lru_hash_set_tests {
     #[test]
     fn new() {
         let alloc = GAlloc::default();
-        let _hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+        let _hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
     }
 
     #[test]
     fn init() {
         let alloc = GAlloc::default();
         {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(1);
         }
 
         {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(100);
         }
     }
@@ -1147,7 +1147,7 @@ mod lru_hash_set_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(1);
 
             for i in 0..10 {
@@ -1161,7 +1161,7 @@ mod lru_hash_set_tests {
         }
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(100);
 
             for i in 0..100 {
@@ -1180,7 +1180,7 @@ mod lru_hash_set_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(1);
 
             for i in 0..10 {
@@ -1197,7 +1197,7 @@ mod lru_hash_set_tests {
         }
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(100);
 
             for i in 0..100 {
@@ -1219,7 +1219,7 @@ mod lru_hash_set_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(1);
 
             assert_eq!(false, hash_set.expire());
@@ -1245,7 +1245,7 @@ mod lru_hash_set_tests {
         }
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(100);
 
             assert_eq!(false, hash_set.expire());
@@ -1276,7 +1276,7 @@ mod lru_hash_set_tests {
         let alloc = GAlloc::default();
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(1);
 
             assert_eq!(false, hash_set.expire());
@@ -1323,7 +1323,7 @@ mod lru_hash_set_tests {
         }
 
         unsafe {
-            let mut hash_set = LruHashSet::new(alloc.clone(), RandomState::new());
+            let mut hash_set = RawLruHashSet::new(alloc.clone(), RandomState::new());
             hash_set.init(100);
 
             assert_eq!(false, hash_set.expire());
