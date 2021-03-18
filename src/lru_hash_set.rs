@@ -156,13 +156,14 @@ where
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn insert_with<F, R>(&self, val: T, op: F) -> (Option<R>, RawEntry<T>)
+    pub unsafe fn insert_with<F, R>(&self, val: T, op: F) -> (Option<R>, Entry<T>)
     where
         T: Eq + Hash,
         F: FnOnce(&mut T, T) -> R,
     {
         let eq = |new_val: &T, old_val: &T| new_val == old_val;
-        self.raw.insert_with(val, op, eq)
+        let (r, raw) = self.raw.insert_with(val, op, eq);
+        (r, Entry(raw))
     }
 
     /// Finds an element that equals to `key` and returns the entry if any.
