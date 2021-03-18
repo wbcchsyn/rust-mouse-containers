@@ -1062,12 +1062,11 @@ where
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn get<K>(&self, key: &K) -> Option<Entry<T>>
+    pub unsafe fn get<K, F>(&self, key: &K, eq: F) -> Option<Entry<T>>
     where
-        T: Borrow<K>,
         K: Eq + Hash,
+        F: Fn(&K, &T) -> bool,
     {
-        let eq = |k: &K, v: &T| -> bool { k == v.borrow() };
         self.chain.get(key, eq).map(|(guard, raw)| Entry {
             _guard: guard,
             raw,
@@ -1104,6 +1103,7 @@ where
 #[cfg(test)]
 mod lru_hash_set_tests {
     use gharial::{GAlloc, GBox};
+    use std::borrow::Borrow;
     use std::collections::hash_map::RandomState;
 
     type LruHashSet = super::LruHashSet<GBox<usize>, GAlloc, RandomState>;
@@ -1111,6 +1111,14 @@ mod lru_hash_set_tests {
     fn op(a: &mut GBox<usize>, b: GBox<usize>) -> usize {
         assert_eq!(**a, *b);
         *b
+    }
+
+    fn eq<K, T>(key: &K, val: &T) -> bool
+    where
+        K: Eq,
+        T: Borrow<K>,
+    {
+        key == val.borrow()
     }
 
     #[test]
@@ -1176,7 +1184,7 @@ mod lru_hash_set_tests {
 
             for i in 0..10 {
                 for j in 0..10 {
-                    let r = hash_set.get(&j);
+                    let r = hash_set.get(&j, eq);
                     if j < i {
                         assert_eq!(j, **r.unwrap());
                     } else {
@@ -1193,7 +1201,7 @@ mod lru_hash_set_tests {
 
             for i in 0..100 {
                 for j in 0..100 {
-                    let r = hash_set.get(&j);
+                    let r = hash_set.get(&j, eq);
                     if j < i {
                         assert_eq!(j, **r.unwrap());
                     } else {
@@ -1221,17 +1229,17 @@ mod lru_hash_set_tests {
 
             for i in 0..10 {
                 for j in 0..i {
-                    assert_eq!(true, hash_set.get(&j).is_none());
+                    assert_eq!(true, hash_set.get(&j, eq).is_none());
                 }
                 for j in i..10 {
-                    assert_eq!(true, hash_set.get(&j).is_some());
+                    assert_eq!(true, hash_set.get(&j, eq).is_some());
                 }
                 hash_set.expire();
             }
 
             assert_eq!(false, hash_set.expire());
             for i in 0..10 {
-                assert_eq!(true, hash_set.get(&i).is_none());
+                assert_eq!(true, hash_set.get(&i, eq).is_none());
             }
         }
 
@@ -1247,17 +1255,17 @@ mod lru_hash_set_tests {
 
             for i in 0..100 {
                 for j in 0..i {
-                    assert_eq!(true, hash_set.get(&j).is_none());
+                    assert_eq!(true, hash_set.get(&j, eq).is_none());
                 }
                 for j in i..100 {
-                    assert_eq!(true, hash_set.get(&j).is_some());
+                    assert_eq!(true, hash_set.get(&j, eq).is_some());
                 }
                 hash_set.expire();
             }
 
             assert_eq!(false, hash_set.expire());
             for i in 0..100 {
-                assert_eq!(true, hash_set.get(&i).is_none());
+                assert_eq!(true, hash_set.get(&i, eq).is_none());
             }
         }
     }
@@ -1278,39 +1286,39 @@ mod lru_hash_set_tests {
 
             // [0, 1, 2] -> [0, 1, 2]
             {
-                let e = hash_set.get(&2).unwrap();
+                let e = hash_set.get(&2, eq).unwrap();
                 e.to_mru();
             }
 
             // [0, 1, 2] -> [1, 2, 0]
             {
-                let e = hash_set.get(&0).unwrap();
+                let e = hash_set.get(&0, eq).unwrap();
                 e.to_mru();
             }
 
             // [1, 2, 0] -> [1, 0, 2]
             {
-                let e = hash_set.get(&2).unwrap();
+                let e = hash_set.get(&2, eq).unwrap();
                 e.to_mru();
             }
 
             // [1, 0, 2] -> [0, 2]
             hash_set.expire();
-            assert_eq!(true, hash_set.get(&1).is_none());
-            assert_eq!(true, hash_set.get(&0).is_some());
-            assert_eq!(true, hash_set.get(&2).is_some());
+            assert_eq!(true, hash_set.get(&1, eq).is_none());
+            assert_eq!(true, hash_set.get(&0, eq).is_some());
+            assert_eq!(true, hash_set.get(&2, eq).is_some());
 
             // [0, 2] -> [2]
             hash_set.expire();
-            assert_eq!(true, hash_set.get(&1).is_none());
-            assert_eq!(true, hash_set.get(&0).is_none());
-            assert_eq!(true, hash_set.get(&2).is_some());
+            assert_eq!(true, hash_set.get(&1, eq).is_none());
+            assert_eq!(true, hash_set.get(&0, eq).is_none());
+            assert_eq!(true, hash_set.get(&2, eq).is_some());
 
             // [2] -> []
             hash_set.expire();
-            assert_eq!(true, hash_set.get(&1).is_none());
-            assert_eq!(true, hash_set.get(&0).is_none());
-            assert_eq!(true, hash_set.get(&2).is_none());
+            assert_eq!(true, hash_set.get(&1, eq).is_none());
+            assert_eq!(true, hash_set.get(&0, eq).is_none());
+            assert_eq!(true, hash_set.get(&2, eq).is_none());
         }
 
         unsafe {
@@ -1325,39 +1333,39 @@ mod lru_hash_set_tests {
 
             // [0, 1, 2] -> [0, 1, 2]
             {
-                let e = hash_set.get(&2).unwrap();
+                let e = hash_set.get(&2, eq).unwrap();
                 e.to_mru();
             }
 
             // [0, 1, 2] -> [1, 2, 0]
             {
-                let e = hash_set.get(&0).unwrap();
+                let e = hash_set.get(&0, eq).unwrap();
                 e.to_mru();
             }
 
             // [1, 2, 0] -> [1, 0, 2]
             {
-                let e = hash_set.get(&2).unwrap();
+                let e = hash_set.get(&2, eq).unwrap();
                 e.to_mru();
             }
 
             // [1, 0, 2] -> [0, 2]
             hash_set.expire();
-            assert_eq!(true, hash_set.get(&1).is_none());
-            assert_eq!(true, hash_set.get(&0).is_some());
-            assert_eq!(true, hash_set.get(&2).is_some());
+            assert_eq!(true, hash_set.get(&1, eq).is_none());
+            assert_eq!(true, hash_set.get(&0, eq).is_some());
+            assert_eq!(true, hash_set.get(&2, eq).is_some());
 
             // [0, 2] -> [2]
             hash_set.expire();
-            assert_eq!(true, hash_set.get(&1).is_none());
-            assert_eq!(true, hash_set.get(&0).is_none());
-            assert_eq!(true, hash_set.get(&2).is_some());
+            assert_eq!(true, hash_set.get(&1, eq).is_none());
+            assert_eq!(true, hash_set.get(&0, eq).is_none());
+            assert_eq!(true, hash_set.get(&2, eq).is_some());
 
             // [2] -> []
             hash_set.expire();
-            assert_eq!(true, hash_set.get(&1).is_none());
-            assert_eq!(true, hash_set.get(&0).is_none());
-            assert_eq!(true, hash_set.get(&2).is_none());
+            assert_eq!(true, hash_set.get(&1, eq).is_none());
+            assert_eq!(true, hash_set.get(&0, eq).is_none());
+            assert_eq!(true, hash_set.get(&2, eq).is_none());
         }
     }
 }
