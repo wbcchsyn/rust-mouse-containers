@@ -60,6 +60,25 @@ use std::borrow::Borrow;
 pub use crate::raw_lru_hash_set::Entry as RawEntry;
 use crate::raw_lru_hash_set::RawLruHashSet;
 
+/// `Entry` is the entry of [`LruHashSet`] .
+///
+/// This instance includes an RAII lock guard.
+/// User can sure that no other thread drops nor modifies the element while the instance is.
+///
+/// User can access to the element via the `Deref` implementation.
+///
+/// # Warnings
+///
+/// Some entries shares the same mutex.
+/// ([`LruHashSet`] adopts chain way to implement hash set, and entries in the same bucket shares
+/// the same mutex.)
+///
+/// It may cause a dead lock to call methods of [`LruHashSet`] while the thread holds an instance
+/// of `Entry` .
+///
+/// [`LruHashSet`]: struct.LruHashSet.html
+pub struct Entry<'a, T>(RawEntry<'a, T>);
+
 /// `LruHashSet` is a thread-safe LRU hash set.
 pub struct LruHashSet<T, A, S>
 where
