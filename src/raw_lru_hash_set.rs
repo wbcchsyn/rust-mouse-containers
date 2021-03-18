@@ -448,16 +448,12 @@ where
     ///
     /// It may cause a dead lock to call this method while the thread has an instance of
     /// `Mutex8Guard` .
-    pub unsafe fn get<K>(&self, key: &K) -> Option<(Mutex8Guard, &mut RawEntry<T>)>
+    pub unsafe fn get<K, F>(&self, key: &K, eq: F) -> Option<(Mutex8Guard, &mut RawEntry<T>)>
     where
-        T: Borrow<K>,
         K: Eq + Hash,
+        F: Fn(&K, &T) -> bool,
     {
         let (guard, bucket) = self.get_bucket(&key);
-        let eq = |k: &K, v: &T| -> bool {
-            let v: &K = v.borrow();
-            k == v
-        };
         RawEntry::get(*bucket, key, eq).map(|ptr| (guard, &mut *ptr))
     }
 
@@ -521,6 +517,7 @@ where
 mod bucket_chain_tests {
     use super::*;
     use gharial::{GAlloc, GBox};
+    use std::borrow::Borrow;
     use std::collections::hash_map::RandomState;
 
     type Chain = BucketChain<GBox<usize>, GAlloc, RandomState>;
@@ -528,6 +525,14 @@ mod bucket_chain_tests {
     fn op(a: &mut GBox<usize>, b: GBox<usize>) -> usize {
         assert_eq!(**a, *b);
         **a
+    }
+
+    fn eq<K, T>(key: &K, val: &T) -> bool
+    where
+        K: Eq,
+        T: Borrow<K>,
+    {
+        key == val.borrow()
     }
 
     #[test]
@@ -598,7 +603,7 @@ mod bucket_chain_tests {
 
             for i in 0..10 {
                 for j in 0..10 {
-                    let r = chain.get(&j);
+                    let r = chain.get(&j, eq);
 
                     if i <= j {
                         assert_eq!(true, r.is_none());
@@ -619,7 +624,7 @@ mod bucket_chain_tests {
 
             for i in 0..100 {
                 for j in 0..100 {
-                    let r = chain.get(&j);
+                    let r = chain.get(&j, eq);
 
                     if i <= j {
                         assert_eq!(true, r.is_none());
@@ -652,43 +657,43 @@ mod bucket_chain_tests {
             // [0, 1, 2, 3, 4] -> [0, 1, 2, 3]
             chain.remove(entries[4]);
             for i in &[0, 1, 2, 3] {
-                assert_eq!(true, chain.get(i).is_some());
+                assert_eq!(true, chain.get(i, eq).is_some());
             }
             for i in &[4] {
-                assert_eq!(true, chain.get(i).is_none());
+                assert_eq!(true, chain.get(i, eq).is_none());
             }
 
             // [0, 1, 2, 3] -> [1, 2, 3]
             chain.remove(entries[0]);
             for i in &[1, 2, 3] {
-                assert_eq!(true, chain.get(i).is_some());
+                assert_eq!(true, chain.get(i, eq).is_some());
             }
             for i in &[0, 4] {
-                assert_eq!(true, chain.get(i).is_none());
+                assert_eq!(true, chain.get(i, eq).is_none());
             }
 
             // [1, 2, 3] -> [1, 3]
             chain.remove(entries[2]);
             for i in &[1, 3] {
-                assert_eq!(true, chain.get(i).is_some());
+                assert_eq!(true, chain.get(i, eq).is_some());
             }
             for i in &[0, 2, 4] {
-                assert_eq!(true, chain.get(i).is_none());
+                assert_eq!(true, chain.get(i, eq).is_none());
             }
 
             // [1, 3] -> [1]
             chain.remove(entries[3]);
             for i in &[1] {
-                assert_eq!(true, chain.get(i).is_some());
+                assert_eq!(true, chain.get(i, eq).is_some());
             }
             for i in &[0, 2, 3, 4] {
-                assert_eq!(true, chain.get(i).is_none());
+                assert_eq!(true, chain.get(i, eq).is_none());
             }
 
             // [1] -> []
             chain.remove(entries[1]);
             for i in &[0, 1, 2, 3, 4] {
-                assert_eq!(true, chain.get(i).is_none());
+                assert_eq!(true, chain.get(i, eq).is_none());
             }
         }
 
@@ -705,7 +710,7 @@ mod bucket_chain_tests {
 
             for i in 0..100 {
                 chain.remove(entries[i]);
-                assert_eq!(true, chain.get(&i).is_none());
+                assert_eq!(true, chain.get(&i, eq).is_none());
             }
         }
     }
@@ -1062,7 +1067,8 @@ where
         T: Borrow<K>,
         K: Eq + Hash,
     {
-        self.chain.get(key).map(|(guard, raw)| Entry {
+        let eq = |k: &K, v: &T| -> bool { k == v.borrow() };
+        self.chain.get(key, eq).map(|(guard, raw)| Entry {
             _guard: guard,
             raw,
             order: &self.order,
