@@ -53,14 +53,8 @@
 
 //! Module `lru_hash_set` provides struct `LruHashSet` and the related things.
 
-use bulk_allocator::UnLayoutBulkA;
-use core::alloc::{GlobalAlloc, Layout};
-use core::cell::UnsafeCell;
-use core::hash::{BuildHasher, Hash, Hasher};
-use core::ops::Deref;
-use core::ptr::null_mut;
-use spin_sync::{Mutex, Mutex8, Mutex8Guard};
-use std::alloc::handle_alloc_error;
+use core::alloc::GlobalAlloc;
+use core::hash::{BuildHasher, Hash};
 use std::borrow::Borrow;
 
 pub use crate::raw_lru_hash_set::Entry;
