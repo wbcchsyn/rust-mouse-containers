@@ -79,6 +79,8 @@ use crate::raw_lru_hash_set::RawLruHashSet;
 /// [`LruHashSet`]: struct.LruHashSet.html
 pub struct Entry<'a, T>(RawEntry<'a, T>);
 
+unsafe impl<T> Sync for Entry<'_, T> where T: Send {}
+
 /// `LruHashSet` is a thread-safe LRU hash set.
 pub struct LruHashSet<T, A, S>
 where
