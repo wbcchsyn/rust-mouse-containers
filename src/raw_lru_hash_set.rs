@@ -934,6 +934,8 @@ impl<T> Deref for Entry<'_, T> {
 
 impl<T> Entry<'_, T> {
     /// Makes `self` as the 'Most Recently Used (MRU)' element of the [`RawLruHashSet`] .
+    ///
+    /// [`RawLruHashSet`]: struct.RawLruHashSet.html
     pub fn to_mru(&self) {
         unsafe {
             let link = &mut *self.raw.order.get();
