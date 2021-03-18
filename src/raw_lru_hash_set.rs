@@ -61,7 +61,6 @@ use core::ops::Deref;
 use core::ptr::null_mut;
 use spin_sync::{Mutex, Mutex8, Mutex8Guard};
 use std::alloc::handle_alloc_error;
-use std::borrow::Borrow;
 
 /// `OrderLinks` is a couple of pointers to form a doubly linked list by itself.
 struct OrderLinks {
