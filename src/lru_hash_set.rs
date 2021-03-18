@@ -57,7 +57,7 @@ use core::alloc::GlobalAlloc;
 use core::hash::{BuildHasher, Hash};
 use std::borrow::Borrow;
 
-pub use crate::raw_lru_hash_set::Entry;
+pub use crate::raw_lru_hash_set::Entry as RawEntry;
 use crate::raw_lru_hash_set::RawLruHashSet;
 
 /// `LruHashSet` is a thread-safe LRU hash set.
@@ -117,7 +117,7 @@ where
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn insert_with<F, R>(&self, val: T, op: F) -> (Option<R>, Entry<T>)
+    pub unsafe fn insert_with<F, R>(&self, val: T, op: F) -> (Option<R>, RawEntry<T>)
     where
         T: Eq + Hash,
         F: FnOnce(&mut T, T) -> R,
@@ -139,7 +139,7 @@ where
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn get<K>(&self, key: &K) -> Option<Entry<T>>
+    pub unsafe fn get<K>(&self, key: &K) -> Option<RawEntry<T>>
     where
         T: Borrow<K>,
         K: Eq + Hash,
