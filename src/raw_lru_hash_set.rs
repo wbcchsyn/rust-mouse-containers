@@ -406,17 +406,18 @@ where
     ///
     /// It may cause a dead lock to call this method while the thread owns an instance of
     /// `Mutex8Guard` .
-    pub unsafe fn insert_with<F, R>(
+    pub unsafe fn insert_with<O, E, R>(
         &self,
         val: T,
-        op: F,
+        op: O,
+        eq: E,
     ) -> (Option<R>, Mutex8Guard, &mut RawEntry<T>)
     where
         T: Eq + Hash,
-        F: FnOnce(&mut T, T) -> R,
+        O: FnOnce(&mut T, T) -> R,
+        E: Fn(&T, &T) -> bool,
     {
         let (guard, bucket) = self.get_bucket(&val);
-        let eq = |new_val: &T, entry_val: &T| -> bool { new_val == entry_val };
         match RawEntry::get(*bucket, &val, eq) {
             None => {
                 // Inserting 'val'
@@ -564,12 +565,12 @@ mod bucket_chain_tests {
             chain.init(1);
 
             for i in 0..10 {
-                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(true, r.is_none());
             }
 
             for i in 0..10 {
-                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(i, r.unwrap());
             }
         }
@@ -580,12 +581,12 @@ mod bucket_chain_tests {
             chain.init(100);
 
             for i in 0..100 {
-                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(true, r.is_none());
             }
 
             for i in 0..100 {
-                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _, _) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(i, r.unwrap());
             }
         }
@@ -612,7 +613,7 @@ mod bucket_chain_tests {
                     }
                 }
 
-                let (_r, _guard, _e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (_r, _guard, _e) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
         }
 
@@ -633,7 +634,7 @@ mod bucket_chain_tests {
                     }
                 }
 
-                let (_r, _guard, _e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (_r, _guard, _e) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
         }
     }
@@ -649,7 +650,7 @@ mod bucket_chain_tests {
             let mut entries = Vec::new();
 
             for i in 0..5 {
-                let (_, _, e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (_, _, e) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 entries.push(e);
             }
 
@@ -703,7 +704,7 @@ mod bucket_chain_tests {
             let mut entries = Vec::new();
 
             for i in 0..100 {
-                let (_, _, e) = chain.insert_with(GBox::new(i, alloc.clone()), op);
+                let (_, _, e) = chain.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 entries.push(e);
             }
 
@@ -1022,7 +1023,8 @@ where
         T: Eq + Hash,
         F: FnOnce(&mut T, T) -> R,
     {
-        match self.chain.insert_with(val, op) {
+        let eq = |new_val: &T, entry_val: &T| new_val == entry_val;
+        match self.chain.insert_with(val, op, eq) {
             (None, guard, raw) => {
                 let link = &mut *raw.order.get();
                 let mut order = self.order.lock().unwrap();
