@@ -55,6 +55,7 @@
 
 use core::alloc::GlobalAlloc;
 use core::hash::{BuildHasher, Hash};
+use core::ops::Deref;
 use std::borrow::Borrow;
 
 pub use crate::raw_lru_hash_set::Entry as RawEntry;
@@ -80,6 +81,14 @@ use crate::raw_lru_hash_set::RawLruHashSet;
 pub struct Entry<'a, T>(RawEntry<'a, T>);
 
 unsafe impl<T> Sync for Entry<'_, T> where T: Send {}
+
+impl<T> Deref for Entry<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
 
 /// `LruHashSet` is a thread-safe LRU hash set.
 pub struct LruHashSet<T, A, S>
