@@ -179,13 +179,13 @@ where
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn get<K>(&self, key: &K) -> Option<RawEntry<T>>
+    pub unsafe fn get<K>(&self, key: &K) -> Option<Entry<T>>
     where
         T: Borrow<K>,
         K: Eq + Hash,
     {
         let eq = |k: &K, v: &T| -> bool { k == v.borrow() };
-        self.raw.get(key, eq)
+        self.raw.get(key, eq).map(|raw| Entry(raw))
     }
 
     /// Removes the 'Least Recently Used (LRU)' element and returns true if any, or does nothing
