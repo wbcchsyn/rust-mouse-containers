@@ -56,6 +56,7 @@
 #![deny(missing_docs)]
 
 pub mod lru_hash_set;
+mod raw_lru_hash_set;
 mod vec;
 
 pub use lru_hash_set::LruHashSet;
