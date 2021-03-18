@@ -1018,12 +1018,12 @@ where
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn insert_with<F, R>(&self, val: T, op: F) -> (Option<R>, Entry<T>)
+    pub unsafe fn insert_with<O, E, R>(&self, val: T, op: O, eq: E) -> (Option<R>, Entry<T>)
     where
         T: Eq + Hash,
-        F: FnOnce(&mut T, T) -> R,
+        O: FnOnce(&mut T, T) -> R,
+        E: Fn(&T, &T) -> bool,
     {
-        let eq = |new_val: &T, entry_val: &T| new_val == entry_val;
         match self.chain.insert_with(val, op, eq) {
             (None, guard, raw) => {
                 let link = &mut *raw.order.get();
@@ -1151,11 +1151,11 @@ mod lru_hash_set_tests {
             hash_set.init(1);
 
             for i in 0..10 {
-                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(None, r);
             }
             for i in 0..10 {
-                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(Some(i), r);
             }
         }
@@ -1165,11 +1165,11 @@ mod lru_hash_set_tests {
             hash_set.init(100);
 
             for i in 0..100 {
-                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(None, r);
             }
             for i in 0..100 {
-                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                let (r, _) = hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
                 assert_eq!(Some(i), r);
             }
         }
@@ -1192,7 +1192,7 @@ mod lru_hash_set_tests {
                         assert_eq!(true, r.is_none());
                     }
                 }
-                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
         }
 
@@ -1209,7 +1209,7 @@ mod lru_hash_set_tests {
                         assert_eq!(true, r.is_none());
                     }
                 }
-                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
         }
     }
@@ -1225,7 +1225,7 @@ mod lru_hash_set_tests {
             assert_eq!(false, hash_set.expire());
 
             for i in 0..10 {
-                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
 
             for i in 0..10 {
@@ -1251,7 +1251,7 @@ mod lru_hash_set_tests {
             assert_eq!(false, hash_set.expire());
 
             for i in 0..100 {
-                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
 
             for i in 0..100 {
@@ -1282,7 +1282,7 @@ mod lru_hash_set_tests {
             assert_eq!(false, hash_set.expire());
 
             for i in 0..3 {
-                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
 
             // [0, 1, 2] -> [0, 1, 2]
@@ -1329,7 +1329,7 @@ mod lru_hash_set_tests {
             assert_eq!(false, hash_set.expire());
 
             for i in 0..3 {
-                hash_set.insert_with(GBox::new(i, alloc.clone()), op);
+                hash_set.insert_with(GBox::new(i, alloc.clone()), op, eq);
             }
 
             // [0, 1, 2] -> [0, 1, 2]
