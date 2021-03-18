@@ -449,7 +449,7 @@ where
     /// `Mutex8Guard` .
     pub unsafe fn get<K, F>(&self, key: &K, eq: F) -> Option<(Mutex8Guard, &mut RawEntry<T>)>
     where
-        K: Eq + Hash,
+        K: Hash,
         F: Fn(&K, &T) -> bool,
     {
         let (guard, bucket) = self.get_bucket(&key);
@@ -1063,7 +1063,7 @@ where
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
     pub unsafe fn get<K, F>(&self, key: &K, eq: F) -> Option<Entry<T>>
     where
-        K: Eq + Hash,
+        K: Hash,
         F: Fn(&K, &T) -> bool,
     {
         self.chain.get(key, eq).map(|(guard, raw)| Entry {
