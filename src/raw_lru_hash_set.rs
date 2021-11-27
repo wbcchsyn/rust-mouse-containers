@@ -185,7 +185,7 @@ mod raw_entry_tests {
     #[test]
     fn get() {
         let r = RawEntry::<i32>::get(null_mut(), &1, eq);
-        assert!(true, r.is_none());
+        assert_eq!(true, r.is_none());
 
         let mut v = Vec::with_capacity(10);
         v.push(RawEntry::<usize>::new(0, null_mut()));
