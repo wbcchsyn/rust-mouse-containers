@@ -391,11 +391,11 @@ where
     ///
     /// let (v, old_ptr): (Vec<u8, SimpleAlloc>, *const u8) = {
     ///    let v = Vec::<u8, SimpleAlloc>::default();
-    ///    let ptr = v.as_ptr();
+    ///    let ptr = unsafe { v.as_ptr() };
     ///    (v, ptr)
     /// };
     ///
-    /// let new_ptr = v.as_ptr();
+    /// let new_ptr = unsafe { v.as_ptr() };
     /// assert_ne!(old_ptr, new_ptr);
     ///
     /// // `GlobalAlloc` just for the sample.
@@ -421,7 +421,7 @@ where
     ///     }
     /// }
     /// ```
-    pub fn as_ptr(&self) -> *const T {
+    pub unsafe fn as_ptr(&self) -> *const T {
         if self.is_stack() {
             let ptr = &self.buffer as *const (*mut T, usize);
             ptr as *const T
