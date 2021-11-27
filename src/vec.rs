@@ -65,6 +65,9 @@ use std::borrow::{Borrow, BorrowMut};
 ///
 /// - `Vec` takes allocator as the parameter.
 /// - `Vec` does not implement some methods that costs O(n) CPU time or more on purpose.
+/// - `Vec` uses the stack pointer as a buffer if the required capacity is small enough for the
+///   performance.
+///   It may change the buffer pointer as well to move object.
 #[derive(Debug)]
 pub struct Vec<T, A>
 where
@@ -372,7 +375,53 @@ where
     }
 
     /// Returns a raw pointer to the buffer.
-    pub fn as_ptr(&self) -> *const T {
+    ///
+    /// # Warnings
+    ///
+    /// Unlike to `std::vec::Vec` , `Vec` uses the stack pointer as a buffer if the required
+    /// capacity is small enough for the performance.
+    /// It may change the buffer pointer as well to move object.
+    ///
+    /// # Examples
+    ///
+    /// Moving object will move the buffer pointer as well.
+    ///
+    /// ```
+    /// use mouse_containers::Vec;
+    ///
+    /// let (v, old_ptr): (Vec<u8, SimpleAlloc>, *const u8) = {
+    ///    let v = Vec::<u8, SimpleAlloc>::default();
+    ///    let ptr = unsafe { v.as_ptr() };
+    ///    (v, ptr)
+    /// };
+    ///
+    /// let new_ptr = unsafe { v.as_ptr() };
+    /// assert_ne!(old_ptr, new_ptr);
+    ///
+    /// // `GlobalAlloc` just for the sample.
+    ///
+    /// use core::alloc::{GlobalAlloc, Layout};
+    /// use std::alloc;
+    ///
+    /// struct SimpleAlloc;
+    ///
+    /// impl Default for SimpleAlloc {
+    ///     fn default() -> Self {
+    ///         Self
+    ///     }
+    /// }
+    ///
+    /// unsafe impl GlobalAlloc for SimpleAlloc {
+    ///     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+    ///         alloc::alloc(layout)
+    ///     }
+    ///
+    ///     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+    ///         alloc::dealloc(ptr, layout)
+    ///     }
+    /// }
+    /// ```
+    pub unsafe fn as_ptr(&self) -> *const T {
         if self.is_stack() {
             let ptr = &self.buffer as *const (*mut T, usize);
             ptr as *const T
@@ -382,7 +431,53 @@ where
     }
 
     /// Returns a raw pointer to the buffer.
-    pub fn as_mut_ptr(&mut self) -> *mut T {
+    ///
+    /// # Warnings
+    ///
+    /// Unlike to `std::vec::Vec` , `Vec` uses the stack pointer as a buffer if the required
+    /// capacity is small enough for the performance.
+    /// It may change the buffer pointer as well to move object.
+    ///
+    /// # Examples
+    ///
+    /// Moving object will move the buffer pointer as well.
+    ///
+    /// ```
+    /// use mouse_containers::Vec;
+    ///
+    /// let (mut v, old_ptr): (Vec<u8, SimpleAlloc>, *mut u8) = {
+    ///    let mut v = Vec::<u8, SimpleAlloc>::default();
+    ///    let ptr = unsafe { v.as_mut_ptr() };
+    ///    (v, ptr)
+    /// };
+    ///
+    /// let new_ptr = unsafe { v.as_mut_ptr() };
+    /// assert_ne!(old_ptr, new_ptr);
+    ///
+    /// // `GlobalAlloc` just for the sample.
+    ///
+    /// use core::alloc::{GlobalAlloc, Layout};
+    /// use std::alloc;
+    ///
+    /// struct SimpleAlloc;
+    ///
+    /// impl Default for SimpleAlloc {
+    ///     fn default() -> Self {
+    ///         Self
+    ///     }
+    /// }
+    ///
+    /// unsafe impl GlobalAlloc for SimpleAlloc {
+    ///     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+    ///         alloc::alloc(layout)
+    ///     }
+    ///
+    ///     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+    ///         alloc::dealloc(ptr, layout)
+    ///     }
+    /// }
+    /// ```
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut T {
         if self.is_stack() {
             let ptr = &mut self.buffer as *mut (*mut T, usize);
             ptr as *mut T
