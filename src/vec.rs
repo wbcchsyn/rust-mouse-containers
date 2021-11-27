@@ -447,11 +447,11 @@ where
     ///
     /// let (mut v, old_ptr): (Vec<u8, SimpleAlloc>, *mut u8) = {
     ///    let mut v = Vec::<u8, SimpleAlloc>::default();
-    ///    let ptr = v.as_mut_ptr();
+    ///    let ptr = unsafe { v.as_mut_ptr() };
     ///    (v, ptr)
     /// };
     ///
-    /// let new_ptr = v.as_mut_ptr();
+    /// let new_ptr = unsafe { v.as_mut_ptr() };
     /// assert_ne!(old_ptr, new_ptr);
     ///
     /// // `GlobalAlloc` just for the sample.
@@ -477,7 +477,7 @@ where
     ///     }
     /// }
     /// ```
-    pub fn as_mut_ptr(&mut self) -> *mut T {
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut T {
         if self.is_stack() {
             let ptr = &mut self.buffer as *mut (*mut T, usize);
             ptr as *mut T
