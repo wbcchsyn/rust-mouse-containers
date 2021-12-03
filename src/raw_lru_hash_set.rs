@@ -914,7 +914,9 @@ std::thread_local! {
 ///
 /// User can access to the element via the `Deref` implementation.
 ///
-/// # Warnings
+/// # Panics
+///
+/// Panics if one thread has 2 or more than 2 instances at the same time to help a dead lock.
 ///
 /// Some entries shares the same mutex.
 /// ([`RawLruHashSet`] adopts chain way to implement hash set, and entries in the same bucket shares
@@ -928,6 +930,15 @@ pub struct Entry<'a, T> {
     _guard: Mutex8Guard<'a>,
     raw: &'a mut RawEntry<T>,
     order: &'a Mutex<Order>,
+}
+
+impl<T> Drop for Entry<'_, T> {
+    fn drop(&mut self) {
+        ENTRY_COUNT.with(|c| {
+            debug_assert_eq!(1, c.get());
+            c.set(0);
+        });
+    }
 }
 
 unsafe impl<T> Sync for Entry<'_, T> where T: Send {}
@@ -1019,12 +1030,13 @@ where
     /// 'Most Recently Used (MRU)'.
     /// Call [`Entry.to_mru`] if necessary.
     ///
+    /// # Panics
+    ///
+    /// Panics if this method is called while the thread owns an instance of [`Entry`] .
+    ///
     /// # Safety
     ///
     /// The behavior is undefined if `op` changes the hash of the element in `self` .
-    ///
-    /// It may cause a dead lock to call this method while the thread owns an instance of
-    /// [`Entry`] .
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
@@ -1034,6 +1046,11 @@ where
         O: FnOnce(&mut T, T) -> R,
         E: Fn(&T, &T) -> bool,
     {
+        ENTRY_COUNT.with(|c| {
+            assert_eq!(0, c.get());
+            c.set(1);
+        });
+
         match self.chain.insert_with(val, op, eq) {
             (None, guard, raw) => {
                 let link = &mut *raw.order.get();
@@ -1066,10 +1083,9 @@ where
     /// Call [`Entry.to_mru`] if necessary
     ///
     ///
-    /// # Safety
+    /// # Panics
     ///
-    /// It may cause a dead lock to call this method while the thread owns an instance of
-    /// [`Entry`] .
+    /// Panics if this method is called while the thread owns an instance of [`Entry`] .
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
@@ -1078,10 +1094,16 @@ where
         K: Hash,
         F: Fn(&K, &T) -> bool,
     {
-        self.chain.get(key, eq).map(|(guard, raw)| Entry {
-            _guard: guard,
-            raw,
-            order: &self.order,
+        ENTRY_COUNT.with(|c| assert_eq!(0, c.get()));
+
+        self.chain.get(key, eq).map(|(guard, raw)| {
+            ENTRY_COUNT.with(|c| c.set(1));
+
+            Entry {
+                _guard: guard,
+                raw,
+                order: &self.order,
+            }
         })
     }
 
