@@ -143,16 +143,18 @@ where
     /// Otherwise, i.e. if `self` had the element that equals to `val` , calls
     /// `op(holding_element, val)` and returns the result of `op` and the entry.
     ///
-    /// Note that if `self` had `val` , this method will not make the entry the
+    /// Note that even if `self` had `val` , this method will not make the entry the
     /// 'Most Recently Used (MRU)'.
     /// Call [`Entry.to_mru`] if necessary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this method is called while the thread owns an instance of [`Entry`] to help a
+    /// dead lock.
     ///
     /// # Safety
     ///
     /// The behavior is undefined if `op` changes the hash of the element in `self` .
-    ///
-    /// It may cause a dead lock to call this method while the thread owns an instance of
-    /// [`Entry`] .
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
