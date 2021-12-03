@@ -55,7 +55,7 @@
 
 use bulk_allocator::UnLayoutBulkA;
 use core::alloc::{GlobalAlloc, Layout};
-use core::cell::UnsafeCell;
+use core::cell::{Cell, UnsafeCell};
 use core::hash::{BuildHasher, Hash, Hasher};
 use core::ops::Deref;
 use core::ptr::null_mut;
@@ -897,6 +897,14 @@ mod order_tests {
             assert_eq!(link, &mut v[i] as *mut OrderLinks);
         }
     }
+}
+
+std::thread_local! {
+    /// Number how many `Entry` instances this thread owns.
+    ///
+    /// (It may cause a dead lock for one thread to own 2 or more than 2 `Entry` instances.
+    /// This number must be 0 or 1.)
+    static ENTRY_COUNT: Cell<u8> = Cell::new(0);
 }
 
 /// `Entry` is the entry of [`RawLruHashSet`] .
