@@ -1089,22 +1089,24 @@ where
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn get<K, F>(&self, key: &K, eq: F) -> Option<Entry<T>>
+    pub fn get<K, F>(&self, key: &K, eq: F) -> Option<Entry<T>>
     where
         K: Hash,
         F: Fn(&K, &T) -> bool,
     {
         ENTRY_COUNT.with(|c| assert_eq!(0, c.get()));
 
-        self.chain.get(key, eq).map(|(guard, raw)| {
-            ENTRY_COUNT.with(|c| c.set(1));
+        unsafe {
+            self.chain.get(key, eq).map(|(guard, raw)| {
+                ENTRY_COUNT.with(|c| c.set(1));
 
-            Entry {
-                _guard: guard,
-                raw,
-                order: &self.order,
-            }
-        })
+                Entry {
+                    _guard: guard,
+                    raw,
+                    order: &self.order,
+                }
+            })
+        }
     }
 
     /// Removes the 'Least Recently Used (LRU)' element and returns true if any, or does nothing
