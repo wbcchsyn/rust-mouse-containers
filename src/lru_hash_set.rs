@@ -171,15 +171,13 @@ where
     /// Note that this method will not made the entry the 'Most Recently Used (MRU).'
     /// Call [`Entry.to_mru`] if necessary
     ///
+    /// # Panics
     ///
-    /// # Safety
-    ///
-    /// It may cause a dead lock to call this method while the thread owns an instance of
-    /// [`Entry`] .
+    /// Panics if this method is called while the thread owns an instance of [`Entry`] .
     ///
     /// [`Entry`]: struct.Entry.html
     /// [`Entry.to_mru`]: struct.Entry.html#method.to_mru
-    pub unsafe fn get<K>(&self, key: &K) -> Option<Entry<T>>
+    pub fn get<K>(&self, key: &K) -> Option<Entry<T>>
     where
         T: Borrow<K>,
         K: Eq + Hash,
